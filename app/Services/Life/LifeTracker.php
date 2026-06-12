@@ -10,11 +10,8 @@ class LifeTracker
 {
     public function connect(string $gamertag, \DateTimeImmutable $ts): void
     {
-        $player = Player::firstOrCreate(
-            ['gamertag' => $gamertag],
-            ['first_seen_at' => $ts, 'last_seen_at' => $ts]
-        );
-        $this->touch($player, $ts);
+        $player = Player::firstOrCreate(['gamertag' => $gamertag]);
+        $this->touch($player, $ts); // sole writer of first_seen_at / last_seen_at
 
         if ($open = $player->openSession()) {
             $this->closeSession($open, $ts, 'superseded');
@@ -37,11 +34,8 @@ class LifeTracker
      */
     public function death(array $death, \DateTimeImmutable $ts): void
     {
-        $player = Player::firstOrCreate(
-            ['gamertag' => $death['victim']],
-            ['first_seen_at' => $ts, 'last_seen_at' => $ts]
-        );
-        $this->touch($player, $ts);
+        $player = Player::firstOrCreate(['gamertag' => $death['victim']]);
+        $this->touch($player, $ts); // sole writer of first_seen_at / last_seen_at
 
         if ($open = $player->openSession()) {
             $this->closeSession($open, $ts, 'clean');
