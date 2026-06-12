@@ -144,6 +144,36 @@ Gated by `ADMIN_ROLE_ID` (a member must hold that role; fail-closed if unset):
 - `/distribute-unbans [confirm]` — preview the monthly grant; run with `confirm: true` to apply
   it (idempotent — the grant also fires automatically each month).
 
+## Bounty
+
+The bounty system places a live target on the player carrying the longest active playtime. Any
+non-associate player who kills the bounty holder earns **+1 unban token**; associates earn nothing.
+
+- The bounty follows the top-playtime, recently-active eligible life and moves automatically when a
+  challenger leads by more than `BOUNTY_MOVE_MARGIN_SECONDS` (default 3 600 s / 1 h).
+- **Associates** are detected automatically using a weighted blend of co-presence, proximity, and
+  shared kill-graph signals, evaluated over a rolling `BOUNTY_ASSOC_WINDOW_DAYS` window (default 14
+  days). Pairs that fight each other are never flagged as associates.
+- `/bounty` — show the current bounty target and how far the runner-up trails.
+- `/team action gamertag [gamertag2]` — admin command (requires `ADMIN_ROLE_ID`):
+  - `link` — force two gamertags to be treated as associates (suppresses bounty payout).
+  - `unlink` — force two gamertags to be treated as NOT associates.
+  - `clear` — remove the override and return to the algorithm.
+  - `show` — display a gamertag's current detected associates and their scores.
+
+Key `config/bounty.php` env vars:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `BOUNTY_PLAYTIME_FLOOR_SECONDS` | Minimum playtime to be eligible | 3 600 (1 h) |
+| `BOUNTY_ACTIVE_WINDOW_HOURS` | Must have a session within this window | 48 |
+| `BOUNTY_MOVE_MARGIN_SECONDS` | Lead required to displace the current holder | 3 600 |
+| `BOUNTY_ASSOC_WINDOW_DAYS` | Look-back window for association signals | 14 |
+| `BOUNTY_ASSOC_THRESHOLD` | Minimum blended score to flag a pair | 0.5 |
+| `BOUNTY_ASSOC_RADIUS_M` | Proximity radius for co-location scoring | 200 |
+
+Token awards from bounty kills are DB-only writes and fire even when `BAN_DRY_RUN=true`.
+
 ## Tests
 
 ```bash

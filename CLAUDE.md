@@ -79,6 +79,13 @@ Feature test, and keep the command/Service a wiring shim.
   expire + reconcile), `MonthlyRewardService` (hourly: month-rollover grant + DMs).
 - `app/SlashCommands/` — `/link /referrer /unban /unbans /stats /bans /referrals` + admin set;
   admin commands `use App\SlashCommands\Concerns\GuardsAdmin` and call `denyIfNotAdmin()` first.
+- **Bounty system** — `app/Services/Bounty/`: `AssociateDetector` (3-signal blend: co-presence,
+  proximity, kill-graph; override-aware), `BountyService` (rank/place/move/claim/status),
+  `OverrideService` (force-link/unlink/clear pairs), plus `DiscordBountyNotifier` / `NullBountyNotifier`.
+  Periodic: `BountyTickService` (60s). Slash commands: `/bounty` (show current target) and `/team`
+  (admin override manager). Tunables in `config/bounty.php` (all env-overridable). **Note:**
+  `BAN_DRY_RUN` does NOT gate bounty token awards — they are DB-only writes with no external
+  side effects, so they fire even in dry-run mode.
 
 ## Key domain rules (easy to get wrong)
 
