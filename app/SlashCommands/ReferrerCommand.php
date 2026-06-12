@@ -2,7 +2,7 @@
 
 namespace App\SlashCommands;
 
-use App\Models\Player;
+use App\Services\Lookup\GamertagLookup;
 use App\Services\Tokens\ReferrerService;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -68,11 +68,7 @@ class ReferrerCommand extends SlashCommand
     public function autocomplete(): array
     {
         return [
-            'gamertag' => fn (Interaction $i, $value) => Player::whereNotNull('discord_user_id')
-                ->when($value, fn ($q) => $q->where('gamertag', 'like', "%{$value}%"))
-                ->orderByDesc('last_seen_at')
-                ->limit(25)
-                ->pluck('gamertag'),
+            'gamertag' => fn (Interaction $i, $value) => (new GamertagLookup())->players($value, linked: true),
         ];
     }
 }

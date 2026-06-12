@@ -2,8 +2,8 @@
 
 namespace App\SlashCommands;
 
-use App\Models\Player;
 use App\Services\Admin\AdminService;
+use App\Services\Lookup\GamertagLookup;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -36,9 +36,7 @@ class AddUnbanCommand extends SlashCommand
     public function autocomplete(): array
     {
         return [
-            'gamertag' => fn (Interaction $i, $value) => Player::query()
-                ->when($value, fn ($q) => $q->where('gamertag', 'like', "%{$value}%"))
-                ->orderByDesc('last_seen_at')->limit(25)->pluck('gamertag'),
+            'gamertag' => fn (Interaction $i, $value) => (new GamertagLookup())->players($value),
         ];
     }
 }

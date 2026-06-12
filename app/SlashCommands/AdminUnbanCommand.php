@@ -2,9 +2,9 @@
 
 namespace App\SlashCommands;
 
-use App\Models\Ban;
 use App\Services\Ban\BanService;
 use App\Services\Ban\DiscordBanNotifier;
+use App\Services\Lookup\GamertagLookup;
 use App\Services\Nitrado\NitradoClient;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
@@ -43,11 +43,7 @@ class AdminUnbanCommand extends SlashCommand
     public function autocomplete(): array
     {
         return [
-            'gamertag' => fn (Interaction $i, $value) => Ban::where('expired', false)
-                ->with('player')->get()
-                ->map(fn ($b) => $b->player?->gamertag)->filter()->unique()
-                ->when($value, fn ($c) => $c->filter(fn ($t) => str_contains(strtolower((string) $t), strtolower((string) $value))))
-                ->take(25)->values(),
+            'gamertag' => fn (Interaction $i, $value) => (new GamertagLookup())->bannedGamertags($value),
         ];
     }
 }

@@ -2,12 +2,11 @@
 
 namespace App\SlashCommands;
 
-use App\Models\Ban;
 use App\Services\Ban\BanService;
 use App\Services\Ban\DiscordBanNotifier;
+use App\Services\Lookup\GamertagLookup;
 use App\Services\Nitrado\NitradoClient;
 use App\Services\Tokens\RedemptionService;
-use Carbon\CarbonImmutable;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
 
@@ -80,16 +79,7 @@ class UnbanCommand extends SlashCommand
     public function autocomplete(): array
     {
         return [
-            'player' => function (Interaction $i, $value) {
-                $now = CarbonImmutable::now();
-
-                return Ban::query()->where('expired', false)
-                    ->whereNotNull('expires_at')->where('expires_at', '>', $now)
-                    ->with('player')->get()
-                    ->map(fn (Ban $b) => $b->player?->gamertag)->filter()->unique()
-                    ->when($value, fn ($c) => $c->filter(fn ($t) => str_contains(strtolower($t), strtolower((string) $value))))
-                    ->take(25)->values();
-            },
+            'player' => fn (Interaction $i, $value) => (new GamertagLookup())->bannedGamertags($value, temporaryOnly: true),
         ];
     }
 }

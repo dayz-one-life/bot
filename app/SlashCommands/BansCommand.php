@@ -4,6 +4,7 @@ namespace App\SlashCommands;
 
 use App\Models\Ban;
 use App\Models\Player;
+use App\Services\Lookup\GamertagLookup;
 use Carbon\CarbonImmutable;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -75,9 +76,7 @@ class BansCommand extends SlashCommand
     public function autocomplete(): array
     {
         return [
-            'player' => fn (Interaction $i, $value) => Player::query()
-                ->when($value, fn ($q) => $q->where('gamertag', 'like', "%{$value}%"))
-                ->orderByDesc('last_seen_at')->limit(25)->pluck('gamertag'),
+            'player' => fn (Interaction $i, $value) => (new GamertagLookup())->players($value),
         ];
     }
 }
