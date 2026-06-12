@@ -11,6 +11,48 @@ class NitradoClient
 
     public function __construct(private string $token, private int $serviceId) {}
 
+    private function post(string $path, array $body): array
+    {
+        $res = Http::withToken($this->token)->acceptJson()->asJson()->timeout(20)
+            ->post(self::API_BASE.$path, $body);
+        $json = $res->json();
+        if (!$res->ok() || ($json['status'] ?? null) !== 'success') {
+            throw new \RuntimeException("Nitrado API error {$res->status()}");
+        }
+        return $json['data'] ?? [];
+    }
+
+    /** @return string[] current banned gamertags from settings.general.bans */
+    public function getBans(): array
+    {
+        $data = $this->get("/services/{$this->serviceId}/gameservers/settings");
+        $raw = $data['settings']['general']['bans'] ?? '';
+        return array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) $raw)), fn ($s) => $s !== ''));
+    }
+
+    public function addBan(string $gamertag): void
+    {
+        $bans = $this->getBans();
+        if (in_array($gamertag, $bans, true)) return; // idempotent
+        $bans[] = $gamertag;
+        $this->updateBans($bans);
+    }
+
+    public function removeBan(string $gamertag): void
+    {
+        $bans = array_values(array_filter($this->getBans(), fn ($b) => $b !== $gamertag));
+        $this->updateBans($bans);
+    }
+
+    private function updateBans(array $bans): void
+    {
+        $this->post("/services/{$this->serviceId}/gameservers/settings", [
+            'category' => 'general',
+            'key' => 'bans',
+            'value' => implode("\r\n", $bans),
+        ]);
+    }
+
     private function get(string $path): array
     {
         $res = Http::withToken($this->token)->acceptJson()->timeout(20)
