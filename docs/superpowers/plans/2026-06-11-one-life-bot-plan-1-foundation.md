@@ -1865,4 +1865,16 @@ git commit -m "docs: Plan 1 run instructions"
 - **Verification milestone against real data** → Tasks 16–17.
 
 **Out of scope here (Plan 2+):** death→ban, ban expiry + reconcile, Nitrado `general.bans` writes, linking, token economy, all slash commands. These build on the verified data model.
+
+---
+
+## Implementation notes (discovered during Plan 1 execution)
+
+Facts about the installed **Laracord v2.3.0 (Laravel Zero)** stack, for Plans 2–3:
+
+- **Periodic tasks are `Laracord\Services\Service`**, not `Laracord\Tasks\Task`. A service lives anywhere under `app/Services/` (auto-discovered by subclassing `Service`), declares `protected int $interval` (seconds) and `protected $enabled`, implements `handle()`, and has `$this->console()` / `$this->discord()`. The ingestion task shipped as `app/Services/IngestAdmService.php` (not `IngestAdmTask`). Our plain pipeline classes (`AdmParser`, `LifeTracker`, etc.) live in `app/Services/**` subdirectories and are ignored by discovery because they don't extend `Service`.
+- **Console (artisan-style) commands** live in `app/Console/Commands/` (Laracord's vendored `commands.php` config points there), extend `Laracord\Console\Commands\Command`, and are auto-registered. This is separate from `app/Commands/` which holds **Discord** message commands (`Laracord\Commands\Command`). Plan 2/3 slash commands will use `app/SlashCommands/` extending `Laracord\Commands\SlashCommand`.
+- **PHP 8.5 deprecation crash:** a vendored MySQL config triggers a `PDO::MYSQL_ATTR_SSL_CA` deprecation that crashes `migrate` via the deprecation logger. Fixed by adding `config/logging.php` routing the `deprecations` channel to `null`. Test output still shows harmless `DEPR` markers.
+- **Test harness:** full-framework `Tests\TestCase` (boots `bootstrap/app.php`) + `RefreshDatabase` works; `pest-plugin-laravel` pulled in `laravel/framework` alongside `laravel-zero/foundation` (dual-framework classmap) — benign so far, first suspect if container/kernel issues appear under tests.
+- **Backfill ordering fix:** `AdmIngestor::tick()` must NOT process the newest (live) file during backfill while older files are still pending — doing so feeds the stateful `LifeTracker` out of chronological order. The newest file is processed only once backfill is caught up (or in live mode). Covered by a regression test.
 ```
