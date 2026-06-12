@@ -6,6 +6,7 @@ return [
     'move_margin_min'       => (int) env('BOUNTY_MOVE_MARGIN_MIN', 5),
 
     'assoc_window_days'     => (int) env('BOUNTY_ASSOC_WINDOW_DAYS', 14),
+    'position_retention_days' => (int) env('BOUNTY_POSITION_RETENTION_DAYS', 0), // 0 = keep forever (no pruning)
     'assoc_radius_m'        => (float) env('BOUNTY_ASSOC_RADIUS_M', 150),
     'assoc_threshold'       => (float) env('BOUNTY_ASSOC_THRESHOLD', 0.45),
     'weight_prox'           => (float) env('BOUNTY_ASSOC_WEIGHT_PROX', 0.55),

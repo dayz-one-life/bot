@@ -33,11 +33,23 @@ class BountyTickService extends Service
             $svc = new BountyService(new AssociateDetector(), $state, $notifier, (int) config('bounty.token_reward'));
             $svc->run();
 
-            // Prune position samples older than the detection window.
-            $cutoff = CarbonImmutable::now()->subDays((int) config('bounty.assoc_window_days'));
-            PlayerPosition::where('recorded_at', '<', $cutoff)->delete();
+            $this->prunePositions();
         } catch (\Throwable $e) {
             $this->console()->error('[bounty] tick failed: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Delete position samples older than position_retention_days. Returns the count
+     * deleted. Retention 0 (default) means keep forever — no pruning. Retention is
+     * intentionally separate from the detector's assoc_window_days scoring window.
+     */
+    public function prunePositions(?CarbonImmutable $now = null): int
+    {
+        $retention = (int) config('bounty.position_retention_days');
+        if ($retention <= 0) return 0;
+
+        $now = $now ?? CarbonImmutable::now();
+        return PlayerPosition::where('recorded_at', '<', $now->subDays($retention))->delete();
     }
 }
