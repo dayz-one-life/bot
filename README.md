@@ -150,7 +150,7 @@ The bounty system places a live target on the player carrying the longest active
 non-associate player who kills the bounty holder earns **+1 unban token**; associates earn nothing.
 
 - The bounty follows the top-playtime, recently-active eligible life and moves automatically when a
-  challenger leads by more than `BOUNTY_MOVE_MARGIN_SECONDS` (default 3 600 s / 1 h).
+  challenger leads by more than `BOUNTY_MOVE_MARGIN_MIN` minutes (default 5).
 - **Associates** are detected automatically using a weighted blend of co-presence, proximity, and
   shared kill-graph signals, evaluated over a rolling `BOUNTY_ASSOC_WINDOW_DAYS` window (default 14
   days). Pairs that fight each other are never flagged as associates.
@@ -165,12 +165,16 @@ Key `config/bounty.php` env vars:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `BOUNTY_PLAYTIME_FLOOR_SECONDS` | Minimum playtime to be eligible | 3 600 (1 h) |
-| `BOUNTY_ACTIVE_WINDOW_HOURS` | Must have a session within this window | 48 |
-| `BOUNTY_MOVE_MARGIN_SECONDS` | Lead required to displace the current holder | 3 600 |
+| `BOUNTY_MIN_PLAYTIME_HOURS` | Minimum live playtime (hours) to be eligible | 2 |
+| `BOUNTY_ACTIVITY_WINDOW_HOURS` | Must have been seen within this window (hours) | 48 |
+| `BOUNTY_MOVE_MARGIN_MIN` | Lead (minutes) required to displace the current holder | 5 |
 | `BOUNTY_ASSOC_WINDOW_DAYS` | Look-back window for association signals | 14 |
-| `BOUNTY_ASSOC_THRESHOLD` | Minimum blended score to flag a pair | 0.5 |
-| `BOUNTY_ASSOC_RADIUS_M` | Proximity radius for co-location scoring | 200 |
+| `BOUNTY_ASSOC_RADIUS_M` | Proximity radius (metres) for co-location scoring | 150 |
+| `BOUNTY_ASSOC_THRESHOLD` | Minimum blended score to flag a pair | 0.45 |
+| `BOUNTY_ASSOC_WEIGHT_PROX` / `_COPRES` / `_KILLG` | Signal weights (sum to 1) | 0.55 / 0.35 / 0.10 |
+| `BOUNTY_SYNC_WINDOW_MIN` | Connect/disconnect synchrony window (minutes) | 3 |
+| `BOUNTY_CHANNEL_ID` | Announcements channel (falls back to `BANS_CHANNEL_ID`) | — |
+| `BOUNTY_TOKEN_REWARD` | Tokens awarded per clean claim | 1 |
 
 Token awards from bounty kills are DB-only writes and fire even when `BAN_DRY_RUN=true`.
 
