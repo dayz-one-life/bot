@@ -148,7 +148,9 @@ class AssociateDetector
         $sumA = array_sum(array_map(fn ($i) => $i[1] - $i[0], $ia));
         $sumB = array_sum(array_map(fn ($i) => $i[1] - $i[0], $ib));
         $union = $sumA + $sumB - $overlap;
-        return $union <= 0 ? 0.0 : $overlap / $union;
+        // Clamp to 1.0 defensively: LifeTracker guarantees non-self-overlapping
+        // sessions, but a malformed/external data source must not push score() > 1.
+        return $union <= 0 ? 0.0 : min(1.0, $overlap / $union);
     }
 
     /** @return array<int,int> connect & disconnect epoch-sec events within the window. */
