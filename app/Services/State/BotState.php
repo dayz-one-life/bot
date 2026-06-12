@@ -30,4 +30,9 @@ class BotState
     {
         $this->set($key, (string) $value);
     }
+
+    public function delete(string $key): void
+    {
+        DB::table('bot_state')->where('key', $key)->delete();
+    }
 }
