@@ -2,7 +2,10 @@
 
 namespace App\Services\Adm;
 
+use App\Models\AdmFile;
 use App\Services\Life\LifeTracker;
+use App\Services\Nitrado\NitradoClient;
+use App\Services\State\BotState;
 
 class AdmIngestor
 {
@@ -10,6 +13,59 @@ class AdmIngestor
         private AdmParser $parser,
         private LifeTracker $tracker,
     ) {}
+
+    /**
+     * One ingestion tick. Processes the newest file every tick; drains up to
+     * $backfillBudget older incomplete files (oldest-first). Flips BACKFILL->LIVE
+     * once every file is complete or cursor-current.
+     */
+    public function tick(NitradoClient $client, BotState $state, int $backfillBudget = 15): void
+    {
+        $files = $client->listAdmFiles(); // oldest-first
+        if (empty($files)) return;
+
+        $offsetMs = $this->parser->deriveClockOffsetMs($files);
+        $newestPath = $files[count($files) - 1]['path'];
+        $budget = $backfillBudget;
+        $allCaughtUp = true;
+
+        foreach ($files as $file) {
+            $row = AdmFile::where('path', $file['path'])->first();
+            $isNewest = $file['path'] === $newestPath;
+
+            if ($row?->is_complete && !$isNewest) continue;
+            if (!$isNewest) {
+                if ($budget <= 0) { $allCaughtUp = false; continue; }
+                $budget--;
+            }
+
+            try {
+                $content = $client->downloadFile($file['path']);
+            } catch (\Throwable $e) {
+                $allCaughtUp = false;
+                continue;
+            }
+
+            $cursor = $row?->last_processed_line ?? 0;
+            $fallback = $file['timestamp'] ?? new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            $newCursor = $this->processFile($content, $cursor, $fallback, $offsetMs);
+
+            AdmFile::updateOrCreate(
+                ['path' => $file['path']],
+                [
+                    'name' => $file['name'],
+                    'log_date' => $file['timestamp'],
+                    'last_processed_line' => $newCursor,
+                    'is_complete' => !$isNewest,
+                ]
+            );
+        }
+
+        if ($allCaughtUp && $state->get('mode', 'backfill') !== 'live') {
+            $state->set('mode', 'live');
+            $state->set('go_live_at', (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('c'));
+        }
+    }
 
     /**
      * Apply events from a file's content, starting at $cursor (0-based line index).
