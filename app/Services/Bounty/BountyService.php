@@ -67,10 +67,46 @@ class BountyService
         });
     }
 
-    /** Placeholder filled in Task 13. */
+    /** If the active bounty's life has ended, close it — paying a token for a clean PvP claim. */
     protected function resolveEnded(CarbonImmutable $now): void
     {
-        // no-op until Task 13
+        $active = Bounty::active();
+        if (! $active) return;
+
+        $life = Life::find($active->life_id);
+        if (! $life || $life->ended_at === null) return;
+
+        $target = Player::find($active->player_id);
+
+        // Non-PvP death, or unparseable killer => no token.
+        if ($life->death_cause !== 'pvp' || ! $life->death_by_gamertag) {
+            $this->close($active, 'died', $now);
+            $this->notifier->ended($active, $target, 'died');
+            return;
+        }
+
+        $killer = Player::where('gamertag', $life->death_by_gamertag)->first();
+        if (! $killer || $killer->id === $target->id) {
+            $this->close($active, 'died', $now);
+            $this->notifier->ended($active, $target, 'died');
+            return;
+        }
+
+        if ($this->detector->areAssociates($target, $killer, $now)) {
+            $this->close($active, 'claimed_by_associate', $now);
+            $this->notifier->ended($active, $target, 'claimed_by_associate');
+            return;
+        }
+
+        // Clean claim: award tokens (guarded by token_awarded so a re-tick can't double-pay).
+        Player::where('id', $killer->id)->increment('unban_tokens', $this->tokenReward);
+        $active->update([
+            'ended_at' => $now,
+            'end_reason' => 'claimed',
+            'claimed_by_player_id' => $killer->id,
+            'token_awarded' => true,
+        ]);
+        $this->notifier->claimed($active, $target, $killer->fresh(), $this->tokenReward);
     }
 
     private function eligible(int $playerId, CarbonImmutable $now): bool

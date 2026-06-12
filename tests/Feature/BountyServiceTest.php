@@ -92,3 +92,60 @@ it('drops a stale holder as inactive and moves on', function () {
     expect(Bounty::where('end_reason', 'inactive')->count())->toBe(1);
     expect(Bounty::active()->life_id)->toBe($fresh->id);
 });
+
+/** End the bounty holder's life as a PvP kill by $killerTag. */
+function killHolder(Life $life, string $killerTag): void {
+    $life->update(['ended_at' => CarbonImmutable::now(), 'death_cause' => 'pvp', 'death_by_gamertag' => $killerTag]);
+}
+
+it('awards a token when a non-associate kills the bounty', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    $killer = Player::create(['gamertag' => 'Hunter', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    killHolder($held, 'Hunter');
+
+    $this->svc->run($this->now);
+
+    expect($killer->fresh()->unban_tokens)->toBe(1);
+    $b = Bounty::where('end_reason', 'claimed')->first();
+    expect($b)->not->toBeNull();
+    expect($b->token_awarded)->toBeTrue();
+    expect($b->claimed_by_player_id)->toBe($killer->id);
+});
+
+it('awards no token when an associate kills the bounty', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    $killer = Player::create(['gamertag' => 'Buddy', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    // force associates
+    [$lo, $hi] = $held->player_id < $killer->id ? [$held->player_id, $killer->id] : [$killer->id, $held->player_id];
+    App\Models\AssociateOverride::create(['player_a_id' => $lo, 'player_b_id' => $hi, 'force' => true]);
+    killHolder($held, 'Buddy');
+
+    $this->svc->run($this->now);
+
+    expect($killer->fresh()->unban_tokens)->toBe(0);
+    expect(Bounty::where('end_reason', 'claimed_by_associate')->count())->toBe(1);
+});
+
+it('awards no token for a non-pvp bounty death', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    $held->update(['ended_at' => CarbonImmutable::now(), 'death_cause' => 'bled_out', 'death_by_gamertag' => null]);
+
+    $this->svc->run($this->now);
+
+    expect(Bounty::where('end_reason', 'died')->count())->toBe(1);
+});
+
+it('is idempotent — a resolved bounty is not paid twice', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    $killer = Player::create(['gamertag' => 'Hunter', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    killHolder($held, 'Hunter');
+
+    $this->svc->run($this->now);
+    $this->svc->run($this->now); // second tick
+
+    expect($killer->fresh()->unban_tokens)->toBe(1);
+});
