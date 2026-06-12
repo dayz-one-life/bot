@@ -123,12 +123,14 @@ class AdmParser
      * player and carries a pos=<x, y, z> token, wherever it appears on the line.
      * z (altitude) is dropped — proximity is judged on the horizontal plane.
      *
-     * When a line names multiple players (e.g. a kill line), the FIRST-named player
-     * and the FIRST pos token are recorded — these belong to the same player on DayZ
-     * ADM lines. Note: the exact multi-position kill-line format is to be confirmed
-     * against a real log.
+     * Verified against live ADM (2026-06-12): each player's pos sits inside their own
+     * `(id=<hash> pos=<x, y, z>)` parentheses, present on connect lines, periodic
+     * snapshot lines, build/place events, and deaths. When a line names multiple
+     * players (e.g. a kill line), the FIRST-named player and FIRST pos token are
+     * recorded — these belong to the same player.
      *
-     * "hit by" lines are transient damage events, not position snapshots; they are ignored.
+     * "hit by" lines are transient combat-damage events, not position snapshots; they
+     * are ignored so proximity reflects where players actually dwell, not firefights.
      */
     public function parsePosition(string $raw): ?array
     {
