@@ -151,7 +151,7 @@ Each player has at most one *open life* (`ended_at = null`) and one *open sessio
 |---|---|
 | **CONNECT** | upsert player (set `first_seen_at` if null, `last_seen_at = ts`); if no open life, start a new life; close any stale open session as `superseded`; open a session (`connected_at = ts`, attach to the open life) |
 | **DISCONNECT** | close the open session `clean` (`duration = ts − connected_at`, add to `life.playtime_seconds`); the life stays open |
-| **DEATH** (any cause) | close the open session `clean` at `ts`; end the life (`ended_at = ts`, record `death_cause` + `death_by_gamertag`); if LIVE and `ts > go_live_at`, call `BanService` (12h, `auto_death`, idempotent) |
+| **DEATH** (any cause) | close the open session `clean` at `ts`; end the **open** life (`ended_at = ts`, record `death_cause` + `death_by_gamertag`); if LIVE and `ts > go_live_at`, call `BanService` (12h, `auto_death`, idempotent). **If the player has no open life, ignore the event** — see dedup note below |
 | **BOOT** (`AdminLog started`) | close **all** open sessions at `ts` (`reboot`, add to playtime); lives stay open — a restart doesn't kill anyone |
 
 Therefore: **a life = first connect → death**, spanning any number of sessions and reboots.
@@ -159,6 +159,15 @@ Therefore: **a life = first connect → death**, spanning any number of sessions
 disconnect, a reboot (capped at boot time), or death. After a death the player has no open
 life, so their next connect (post-ban) opens their next life. A reboot only ends sessions —
 when the player reconnects they continue the **same** open life.
+
+**Death de-duplication (validated against real ADM logs):** DayZ logs some deaths as
+**multiple lines** — a descriptive `killed by`/`died` line followed by a bare `(DEAD)`
+position-only line, or a `died.` line and a `committed suicide` line at the same timestamp.
+A death therefore only ever **ends an open life**; if the player has no open life (the first
+line already ended it, or we never saw them connect), the event is a duplicate and is
+**ignored** — we do *not* fabricate a zero-duration life. (An earlier draft recorded such
+events as zero-duration lives, which over-counted deaths; the real-data verification caught
+this.) Respawns log a fresh `is connected`, so genuine second deaths always have an open life.
 
 **Acknowledged imprecision:** a duplicate CONNECT with no preceding disconnect/reboot closes
 the stale session as `superseded` at the new connect time, which can over-count one idle gap.
