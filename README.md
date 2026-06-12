@@ -175,8 +175,11 @@ Key `config/bounty.php` env vars:
 | `BOUNTY_SYNC_WINDOW_MIN` | Connect/disconnect synchrony window (minutes) | 3 |
 | `BOUNTY_CHANNEL_ID` | Announcements channel (falls back to `BANS_CHANNEL_ID`) | — |
 | `BOUNTY_TOKEN_REWARD` | Tokens awarded per clean claim | 1 |
+| `BOUNTY_POSITION_RETENTION_DAYS` | How long to keep position rows (days); 0 = forever | 0 |
 
 Token awards from bounty kills are DB-only writes and fire even when `BAN_DRY_RUN=true`.
+
+Run `php laracord adm:backfill-positions` to seed historical position data (e.g. so association detection works immediately rather than accumulating over ~14 days). `--since-days=N` limits scope; `--keep` appends instead of truncating.
 
 ## Tests
 

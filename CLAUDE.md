@@ -47,6 +47,7 @@ composer install
 php laracord migrate                 # apply migrations (SQLite at database/database.sqlite)
 php laracord                          # run the bot (needs DISCORD_TOKEN; starts the Services)
 php laracord adm:verify --ticks=500 --budget=50   # backfill + life/playtime/death report (no bans)
+php laracord adm:backfill-positions --since-days=14   # backfill position samples (no bans; --keep to append)
 ./vendor/bin/pest                     # run the test suite
 ./vendor/bin/pest tests/Feature/Foo.php   # one file
 ```
@@ -85,7 +86,10 @@ Feature test, and keep the command/Service a wiring shim.
   Periodic: `BountyTickService` (60s). Slash commands: `/bounty` (show current target) and `/team`
   (admin override manager). Tunables in `config/bounty.php` (all env-overridable). **Note:**
   `BAN_DRY_RUN` does NOT gate bounty token awards — they are DB-only writes with no external
-  side effects, so they fire even in dry-run mode.
+  side effects, so they fire even in dry-run mode. Position samples are harvested live during
+  ingest AND can be backfilled across ADM history via `adm:backfill-positions`; retention is
+  governed by `BOUNTY_POSITION_RETENTION_DAYS` (0 = keep forever), separate from the detector's
+  `assoc_window_days` scoring window.
 
 ## Key domain rules (easy to get wrong)
 
