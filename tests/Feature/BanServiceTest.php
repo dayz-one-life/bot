@@ -71,3 +71,14 @@ it('unban is a no-op on the DB for an unknown gamertag', function () {
     $this->service->unban('Ghost', 'cleanup');
     expect(App\Models\Player::where('gamertag', 'Ghost')->exists())->toBeFalse();
 });
+
+it('skips the Nitrado write on unban in dry-run mode but still expires DB bans', function () {
+    $this->service->ban('Alice', 12, 'auto', 'auto_death'); // create an active ban
+    Http::fake();                                            // reset recorded requests
+    $dry = new BanService(new NitradoClient('t', 1), new NullBanNotifier(), dryRun: true);
+
+    $dry->unban('Alice', 'cleanup');
+
+    expect(App\Models\Ban::where('expired', false)->count())->toBe(0);
+    Http::assertNothingSent();
+});
