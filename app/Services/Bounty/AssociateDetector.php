@@ -2,14 +2,50 @@
 
 namespace App\Services\Bounty;
 
+use App\Models\AssociateOverride;
 use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
 use App\Models\PlayerPosition;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 class AssociateDetector
 {
+    /** Weighted blend of the three sub-scores. Directional (uses copresence A->B). 0–1. */
+    public function score(Player $a, Player $b, ?CarbonImmutable $now = null): float
+    {
+        $now = $now ?? CarbonImmutable::now();
+        return (float) config('bounty.weight_prox') * $this->proximityScore($a, $b, $now)
+            + (float) config('bounty.weight_copres') * $this->copresenceScore($a, $b, $now)
+            + (float) config('bounty.weight_killg') * $this->killGraphModifier($a, $b, $now);
+    }
+
+    /**
+     * Override-aware, order-independent associate decision. A force row wins; otherwise
+     * the SYMMETRIC score (max of both directions, since copresence sync is directional)
+     * must clear the threshold. Max leans slightly stricter — it flags a pair if the
+     * association is strong viewed from either side, protecting the token economy.
+     */
+    public function areAssociates(Player $a, Player $b, ?CarbonImmutable $now = null): bool
+    {
+        [$lo, $hi] = $a->id < $b->id ? [$a->id, $b->id] : [$b->id, $a->id];
+        $override = AssociateOverride::where('player_a_id', $lo)->where('player_b_id', $hi)->first();
+        if ($override) return (bool) $override->force;
+
+        $now = $now ?? CarbonImmutable::now();
+        $symmetric = max($this->score($a, $b, $now), $this->score($b, $a, $now));
+        return $symmetric >= (float) config('bounty.assoc_threshold');
+    }
+
+    /** Every other player who clears areAssociates() with $a. */
+    public function associatesOf(Player $a, ?CarbonImmutable $now = null): Collection
+    {
+        return Player::where('id', '!=', $a->id)->get()
+            ->filter(fn (Player $p) => $this->areAssociates($a, $p, $now))
+            ->values();
+    }
+
     /** Average of online-time overlap (Jaccard) and connect/disconnect synchrony. 0–1. */
     public function copresenceScore(Player $a, Player $b, CarbonImmutable $now): float
     {

@@ -95,3 +95,60 @@ it('rewards shared victims in the kill-graph', function () {
         'ended_at' => '2026-06-12T08:30:00Z', 'death_cause' => 'pvp', 'death_by_gamertag' => 'B']);
     expect($this->detector->killGraphModifier($a, $b, $this->now))->toBeGreaterThan(0.0);
 });
+
+it('blends sub-scores with configured weights', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    // full overlap+sync => copresence 1.0; no positions => prox 0; no kills => killg 0
+    gameSession($a, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    gameSession($b, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    config(['bounty.weight_prox' => 0.5, 'bounty.weight_copres' => 0.5, 'bounty.weight_killg' => 0.0]);
+    expect($this->detector->score($a, $b, $this->now))->toBe(0.5); // 0.5*0 + 0.5*1 + 0
+});
+
+it('treats a score at/above threshold as associates', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    gameSession($a, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    gameSession($b, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    config(['bounty.weight_prox' => 0.0, 'bounty.weight_copres' => 1.0, 'bounty.weight_killg' => 0.0,
+            'bounty.assoc_threshold' => 0.5]);
+    expect($this->detector->areAssociates($a, $b, $this->now))->toBeTrue();
+});
+
+it('makes the associate decision order-independent (symmetric)', function () {
+    $a = makePlayer('Heavy'); $b = makePlayer('Light');
+    gameSession($a, '2026-06-12T00:00:00Z', '2026-06-12T06:00:00Z');
+    gameSession($b, '2026-06-12T00:00:00Z', '2026-06-12T02:00:00Z');
+    config(['bounty.weight_prox' => 0.0, 'bounty.weight_copres' => 1.0, 'bounty.weight_killg' => 0.0,
+            'bounty.assoc_threshold' => 0.5]);
+    expect($this->detector->areAssociates($a, $b, $this->now))
+        ->toBe($this->detector->areAssociates($b, $a, $this->now));
+});
+
+it('force-true override makes a pair associates regardless of score', function () {
+    $a = makePlayer('A'); $b = makePlayer('B'); // no shared data => score 0
+    [$lo, $hi] = $a->id < $b->id ? [$a->id, $b->id] : [$b->id, $a->id];
+    AssociateOverride::create(['player_a_id' => $lo, 'player_b_id' => $hi, 'force' => true]);
+    expect($this->detector->areAssociates($a, $b, $this->now))->toBeTrue();
+});
+
+it('force-false override denies a pair even with a high score', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    gameSession($a, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    gameSession($b, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    [$lo, $hi] = $a->id < $b->id ? [$a->id, $b->id] : [$b->id, $a->id];
+    AssociateOverride::create(['player_a_id' => $lo, 'player_b_id' => $hi, 'force' => false]);
+    config(['bounty.weight_copres' => 1.0, 'bounty.assoc_threshold' => 0.1]);
+    expect($this->detector->areAssociates($a, $b, $this->now))->toBeFalse();
+});
+
+it('associatesOf returns every player clearing the bar', function () {
+    $a = makePlayer('A'); $mate = makePlayer('Mate'); $stranger = makePlayer('Stranger');
+    gameSession($a, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    gameSession($mate, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    gameSession($stranger, '2026-06-12T20:00:00Z', '2026-06-12T21:00:00Z');
+    config(['bounty.weight_prox' => 0.0, 'bounty.weight_copres' => 1.0, 'bounty.weight_killg' => 0.0,
+            'bounty.assoc_threshold' => 0.5]);
+    $result = $this->detector->associatesOf($a, $this->now)->pluck('gamertag')->all();
+    expect($result)->toContain('Mate');
+    expect($result)->not->toContain('Stranger');
+});
