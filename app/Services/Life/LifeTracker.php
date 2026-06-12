@@ -32,6 +32,33 @@ class LifeTracker
         ]);
     }
 
+    /**
+     * @param array{victim:string,cause:string,killer:?string} $death
+     */
+    public function death(array $death, \DateTimeImmutable $ts): void
+    {
+        $player = Player::firstOrCreate(
+            ['gamertag' => $death['victim']],
+            ['first_seen_at' => $ts, 'last_seen_at' => $ts]
+        );
+        $this->touch($player, $ts);
+
+        if ($open = $player->openSession()) {
+            $this->closeSession($open, $ts, 'clean');
+        }
+
+        $life = $player->openLife() ?? Life::create([
+            'player_id' => $player->id,
+            'started_at' => $ts,
+        ]);
+
+        $life->update([
+            'ended_at' => $ts,
+            'death_cause' => $death['cause'],
+            'death_by_gamertag' => $death['killer'],
+        ]);
+    }
+
     public function disconnect(string $gamertag, \DateTimeImmutable $ts): void
     {
         $player = Player::where('gamertag', $gamertag)->first();

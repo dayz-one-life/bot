@@ -37,3 +37,36 @@ it('accumulates playtime across multiple sessions in one life', function () {
     expect($player->lives()->count())->toBe(1);
     expect($player->openLife()->playtime_seconds)->toBe(1800 + 900);
 });
+
+it('ends the life on death and records cause and killer', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->death([
+        'victim' => 'Alice', 'cause' => 'pvp', 'killer' => 'Bob',
+    ], at('2026-06-11T10:20:00Z'));
+
+    $player = App\Models\Player::where('gamertag', 'Alice')->first();
+    expect($player->openLife())->toBeNull();             // life ended
+    expect($player->openSession())->toBeNull();          // session closed
+    $life = $player->lives()->latest('started_at')->first();
+    expect($life->death_cause)->toBe('pvp');
+    expect($life->death_by_gamertag)->toBe('Bob');
+    expect($life->playtime_seconds)->toBe(1200);
+    expect($life->ended_at->getTimestamp())->toBe(at('2026-06-11T10:20:00Z')->getTimestamp());
+});
+
+it('opens a new life on the next connect after a death', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->death(['victim' => 'Alice', 'cause' => 'died', 'killer' => null], at('2026-06-11T10:20:00Z'));
+    $this->tracker->connect('Alice', at('2026-06-12T09:00:00Z'));
+
+    $player = App\Models\Player::where('gamertag', 'Alice')->first();
+    expect($player->lives()->count())->toBe(2);
+    expect($player->openLife())->not->toBeNull();
+});
+
+it('records a death with no open life as a closed zero-duration life', function () {
+    $this->tracker->death(['victim' => 'Ghost', 'cause' => 'drowned', 'killer' => null], at('2026-06-11T10:00:00Z'));
+    $player = App\Models\Player::where('gamertag', 'Ghost')->first();
+    expect($player->lives()->count())->toBe(1);
+    expect($player->openLife())->toBeNull();
+});
