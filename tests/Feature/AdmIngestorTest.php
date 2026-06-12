@@ -75,3 +75,40 @@ it('backfills all files oldest-first and flips to live when caught up', function
     $alice = Player::where('gamertag', 'Alice')->first();
     expect($alice->lives()->first()->playtime_seconds)->toBe(1800 + 600);
 });
+
+it('does not jump ahead to the newest file while older files are pending during backfill', function () {
+    Http::fake([
+        '*/gameservers' => Http::response(['status' => 'success', 'data' => ['gameserver' => [
+            'game_specific' => ['path' => '/base/', 'log_files' => []],
+        ]]]),
+        '*/file_server/list*' => Http::response(['status' => 'success', 'data' => ['entries' => [
+            ['name' => 'DayZServer_X1_x64_2026-06-09_00-00-00.ADM', 'path' => '/base/old.ADM', 'modified_at' => 1749427200],
+            ['name' => 'DayZServer_X1_x64_2026-06-10_00-00-00.ADM', 'path' => '/base/mid.ADM', 'modified_at' => 1749513600],
+            ['name' => 'DayZServer_X1_x64_2026-06-11_00-00-00.ADM', 'path' => '/base/new.ADM', 'modified_at' => 1749600000],
+        ]]]),
+        '*file=*old.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/old']]]),
+        '*file=*mid.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/mid']]]),
+        '*file=*new.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/new']]]),
+        'https://dl/old' => Http::response('00:00:00 | Player "Alice" (id=A=) is connected'),
+        'https://dl/mid' => Http::response('00:00:00 | Player "Bob" (id=B=) is connected'),
+        'https://dl/new' => Http::response('00:00:00 | Player "Carol" (id=C=) is connected'),
+    ]);
+
+    $ingestor = new AdmIngestor(new AdmParser(), new LifeTracker());
+    $client = new NitradoClient('t', 1);
+    $state = new BotState();
+
+    // budget 1: only the single oldest file may drain this tick.
+    $ingestor->tick($client, $state, backfillBudget: 1);
+
+    expect(AdmFile::where('path', '/base/old.ADM')->first()?->is_complete)->toBeTrue(); // oldest drained
+    expect(AdmFile::where('path', '/base/new.ADM')->first())->toBeNull();               // newest NOT jumped-ahead-to
+    expect(Player::where('gamertag', 'Carol')->first())->toBeNull();                    // newest events not applied
+    expect($state->get('mode', 'backfill'))->toBe('backfill');                          // not caught up -> no flip
+
+    // Drain the remainder; newest is processed only after older files complete.
+    $ingestor->tick($client, $state, backfillBudget: 10);
+
+    expect($state->get('mode'))->toBe('live');                                          // now caught up
+    expect(Player::where('gamertag', 'Carol')->first())->not->toBeNull();               // applied in order
+});

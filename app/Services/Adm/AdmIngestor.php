@@ -28,6 +28,7 @@ class AdmIngestor
         $newestPath = $files[count($files) - 1]['path'];
         $budget = $backfillBudget;
         $allCaughtUp = true;
+        $isLive = $state->get('mode', 'backfill') === 'live';
 
         foreach ($files as $file) {
             $row = AdmFile::where('path', $file['path'])->first();
@@ -37,6 +38,12 @@ class AdmIngestor
             if (!$isNewest) {
                 if ($budget <= 0) { $allCaughtUp = false; continue; }
                 $budget--;
+            } elseif (!$isLive && !$allCaughtUp) {
+                // Backfill: don't jump ahead to the newest (live) file while older
+                // files are still pending — the state machine needs events in order.
+                // The newest file is last in oldest-first order, so it is processed
+                // once all older files are complete (allCaughtUp still true here).
+                continue;
             }
 
             try {
@@ -75,7 +82,8 @@ class AdmIngestor
     {
         $lines = preg_split('/\r\n|\r|\n/', $content);
         $total = count($lines);
-        if ($cursor < 0 || $cursor > $total) $cursor = 0;
+        if ($cursor < 0) $cursor = 0;
+        if ($cursor > $total) $cursor = $total; // file shrank/rotated: don't reprocess applied lines
 
         // Rebuild timestamp context from the whole file (cheap; files are KB).
         $tsByLine = $this->parser->assignTimestamps($lines, $fallbackDate);
