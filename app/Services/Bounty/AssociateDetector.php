@@ -4,6 +4,7 @@ namespace App\Services\Bounty;
 
 use App\Models\GameSession;
 use App\Models\Player;
+use App\Models\PlayerPosition;
 use Carbon\CarbonImmutable;
 
 class AssociateDetector
@@ -15,6 +16,44 @@ class AssociateDetector
         $overlap = $this->overlapScore($a->id, $b->id, $cutoff, $now);
         $sync = $this->syncScore($a->id, $b->id, $cutoff);
         return ($overlap + $sync) / 2;
+    }
+
+    /** Fraction of shared 5-min time-bins where the pair were within assoc_radius_m. 0–1. */
+    public function proximityScore(Player $a, Player $b, CarbonImmutable $now): float
+    {
+        $cutoff = $now->subDays((int) config('bounty.assoc_window_days'));
+        $radius = (float) config('bounty.assoc_radius_m');
+        $binSec = 300;
+
+        $aBins = $this->binnedPositions($a->id, $cutoff, $binSec);
+        $bBins = $this->binnedPositions($b->id, $cutoff, $binSec);
+
+        $shared = 0;
+        $colocated = 0;
+        foreach ($aBins as $bin => $pa) {
+            if (! isset($bBins[$bin])) continue;
+            $shared++;
+            $pb = $bBins[$bin];
+            $dist = sqrt(($pa['x'] - $pb['x']) ** 2 + ($pa['y'] - $pb['y']) ** 2);
+            if ($dist <= $radius) $colocated++;
+        }
+        return $shared === 0 ? 0.0 : $colocated / $shared;
+    }
+
+    /** @return array<int,array{x:float,y:float}> one representative position per time-bin (last sample wins). */
+    private function binnedPositions(int $playerId, CarbonImmutable $cutoff, int $binSec): array
+    {
+        $rows = PlayerPosition::where('player_id', $playerId)
+            ->where('recorded_at', '>=', $cutoff)
+            ->orderBy('recorded_at')
+            ->get();
+
+        $bins = [];
+        foreach ($rows as $r) {
+            $bin = intdiv($r->recorded_at->getTimestamp(), $binSec);
+            $bins[$bin] = ['x' => (float) $r->x, 'y' => (float) $r->y];
+        }
+        return $bins;
     }
 
     /** @return array<int,array{0:int,1:int}> online intervals (epoch sec), clipped to window; open sessions end at $now. */

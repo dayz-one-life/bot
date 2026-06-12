@@ -51,3 +51,28 @@ it('scores disjoint sessions as 0.0', function () {
     gameSession($b, '2026-06-12T08:00:00Z', '2026-06-12T09:00:00Z');
     expect($this->detector->copresenceScore($a, $b, $this->now))->toBe(0.0);
 });
+
+function playerPos(Player $p, string $at, float $x, float $y): void {
+    PlayerPosition::create(['player_id' => $p->id, 'x' => $x, 'y' => $y, 'recorded_at' => $at]);
+}
+
+it('scores co-located players near 1.0', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    // three different 5-min bins, always within 150m
+    playerPos($a, '2026-06-12T09:00:00Z', 1000, 1000); playerPos($b, '2026-06-12T09:00:30Z', 1050, 1000);
+    playerPos($a, '2026-06-12T09:06:00Z', 2000, 2000); playerPos($b, '2026-06-12T09:06:30Z', 2010, 2000);
+    playerPos($a, '2026-06-12T09:12:00Z', 3000, 3000); playerPos($b, '2026-06-12T09:12:30Z', 3000, 3030);
+    expect($this->detector->proximityScore($a, $b, $this->now))->toBe(1.0);
+});
+
+it('scores far-apart players as 0.0', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    playerPos($a, '2026-06-12T09:00:00Z', 0, 0); playerPos($b, '2026-06-12T09:00:30Z', 9000, 9000);
+    expect($this->detector->proximityScore($a, $b, $this->now))->toBe(0.0);
+});
+
+it('scores proximity 0.0 when bins never overlap', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    playerPos($a, '2026-06-12T09:00:00Z', 0, 0); playerPos($b, '2026-06-12T10:00:00Z', 0, 0);
+    expect($this->detector->proximityScore($a, $b, $this->now))->toBe(0.0);
+});
