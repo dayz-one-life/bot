@@ -11,6 +11,8 @@ class AdmParser
     private const DEATH_RE = '/Player "([^"]+)" \(DEAD\) \(id=([^\s)]+)[^)]*\)(.*)$/u';
     private const HEADER_RE = '/AdminLog started on (\d{4})-(\d{2})-(\d{2}) at (\d{2}):(\d{2}):(\d{2})/';
     private const TIME_RE = '/^(\d{2}):(\d{2}):(\d{2})/';
+    private const PLAYER_NAME_RE = '/Player "([^"]+)"/u';
+    private const POSITION_RE = '/pos=<\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\s*>/u';
 
     private const DAY_MS = 86400000;
     private const ROLLOVER_THRESHOLD_SEC = 43200; // 12h
@@ -120,11 +122,19 @@ class AdmParser
      * Harvest a horizontal position sample (x, y) from any line that names a
      * player and carries a pos=<x, y, z> token, wherever it appears on the line.
      * z (altitude) is dropped — proximity is judged on the horizontal plane.
+     *
+     * When a line names multiple players (e.g. a kill line), the FIRST-named player
+     * and the FIRST pos token are recorded — these belong to the same player on DayZ
+     * ADM lines. Note: the exact multi-position kill-line format is to be confirmed
+     * against a real log.
+     *
+     * "hit by" lines are transient damage events, not position snapshots; they are ignored.
      */
     public function parsePosition(string $raw): ?array
     {
-        if (!preg_match('/Player "([^"]+)"/u', $raw, $p)) return null;
-        if (!preg_match('/pos=<\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)>/u', $raw, $c)) return null;
+        if (str_contains($raw, 'hit by')) return null;
+        if (!preg_match(self::PLAYER_NAME_RE, $raw, $p)) return null;
+        if (!preg_match(self::POSITION_RE, $raw, $c)) return null;
         return ['gamertag' => $p[1], 'x' => (float) $c[1], 'y' => (float) $c[2]];
     }
 

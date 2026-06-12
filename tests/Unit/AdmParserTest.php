@@ -111,3 +111,19 @@ it('parses a position embedded inside the id parentheses', function () {
 it('returns null when a line carries no position', function () {
     expect($this->parser->parsePosition('12:34:56 | Player "Bob" (id=XYZ=) is connected'))->toBeNull();
 });
+
+it('ignores a hit-by line for position sampling', function () {
+    $line = '10:00:00 | Player "Victim" (id=V= pos=<10.0, 20.0, 1.0>)[HP: 50] hit by Player "Attacker" (id=A= pos=<11.0, 21.0, 1.0>) into Torso';
+    expect($this->parser->parsePosition($line))->toBeNull();
+});
+
+it('records the first-named player and first position on a kill line', function () {
+    $line = '10:00:00 | Player "Victim" (id=V= pos=<500.5, 600.5, 5.0>) killed by Player "Killer" (id=K= pos=<900.0, 950.0, 5.0>) with M4A1';
+    $r = $this->parser->parsePosition($line);
+    expect($r)->toBe(['gamertag' => 'Victim', 'x' => 500.5, 'y' => 600.5]);
+});
+
+it('parses negative coordinates', function () {
+    $r = $this->parser->parsePosition('10:00:00 | Player "A" (id=A=) pos=<-500.0, -200.5, 10.0>');
+    expect($r)->toBe(['gamertag' => 'A', 'x' => -500.0, 'y' => -200.5]);
+});
