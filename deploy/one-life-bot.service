@@ -1,0 +1,27 @@
+[Unit]
+Description=One Life Bot (Discord/DayZ - Laracord)
+Documentation=https://github.com/dayz-one-life/bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acab
+Group=acab
+WorkingDirectory=/opt/one-life-bot
+Environment=TZ=UTC
+ExecStart=/usr/bin/php /opt/one-life-bot/laracord
+Restart=on-failure
+RestartSec=10
+# Fail loudly instead of spin-looping on a bad config (e.g. invalid DISCORD_TOKEN):
+# if it crashes 5 times within 120s, stop and surface the failure.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
