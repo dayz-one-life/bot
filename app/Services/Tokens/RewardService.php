@@ -22,13 +22,15 @@ class RewardService
             return ['granted' => 0, 'players' => []];
         }
 
-        $result = $this->computeGrant($now);
-
-        DB::transaction(function () use ($result) {
-            foreach ($result['players'] as $entry) {
+        // Compute AND apply inside one transaction so a player can't link/unlink in
+        // the gap between the read and the increments (which would over/under-count).
+        $result = DB::transaction(function () use ($now) {
+            $computed = $this->computeGrant($now);
+            foreach ($computed['players'] as $entry) {
                 Player::where('discord_user_id', $entry['discord_user_id'])
                     ->increment('unban_tokens', $entry['amount']);
             }
+            return $computed;
         });
 
         $this->state->set('last_reward_month', $monthKey);
