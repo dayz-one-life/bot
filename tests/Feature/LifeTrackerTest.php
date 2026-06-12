@@ -70,3 +70,28 @@ it('records a death with no open life as a closed zero-duration life', function 
     expect($player->lives()->count())->toBe(1);
     expect($player->openLife())->toBeNull();
 });
+
+it('closes all open sessions on reboot but keeps lives open', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->connect('Bob', at('2026-06-11T10:05:00Z'));
+    $this->tracker->reboot(at('2026-06-11T10:30:00Z'));
+
+    $alice = App\Models\Player::where('gamertag', 'Alice')->first();
+    $bob = App\Models\Player::where('gamertag', 'Bob')->first();
+
+    expect($alice->openSession())->toBeNull();
+    expect($bob->openSession())->toBeNull();
+    expect($alice->openLife())->not->toBeNull();         // still alive
+    expect($alice->openLife()->playtime_seconds)->toBe(1800);
+    expect($bob->openLife()->playtime_seconds)->toBe(1500);
+});
+
+it('continues the same life when a player reconnects after a reboot', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->reboot(at('2026-06-11T10:30:00Z'));
+    $this->tracker->connect('Alice', at('2026-06-11T10:45:00Z'));
+
+    $alice = App\Models\Player::where('gamertag', 'Alice')->first();
+    expect($alice->lives()->count())->toBe(1);           // same life
+    expect($alice->openSession())->not->toBeNull();
+});

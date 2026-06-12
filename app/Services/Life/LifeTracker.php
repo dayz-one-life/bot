@@ -59,6 +59,13 @@ class LifeTracker
         ]);
     }
 
+    public function reboot(\DateTimeImmutable $ts): void
+    {
+        GameSession::whereNull('disconnected_at')->get()->each(
+            fn (GameSession $s) => $this->closeSession($s, $ts, 'reboot')
+        );
+    }
+
     public function disconnect(string $gamertag, \DateTimeImmutable $ts): void
     {
         $player = Player::where('gamertag', $gamertag)->first();
