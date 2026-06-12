@@ -149,3 +149,18 @@ it('is idempotent — a resolved bounty is not paid twice', function () {
 
     expect($killer->fresh()->unban_tokens)->toBe(1);
 });
+
+it('reports no active bounty', function () {
+    expect($this->svc->status($this->now))->toBe(['active' => false]);
+});
+
+it('reports the active bounty with runner-up gap', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()]);
+    activeLife('Runner', 7 * 3600);
+    $s = $this->svc->status($this->now);
+    expect($s['active'])->toBeTrue();
+    expect($s['gamertag'])->toBe('Holder');
+    expect($s['playtime_seconds'])->toBe(10 * 3600);
+    expect($s['runner_up_gap_seconds'])->toBe(3 * 3600);
+});

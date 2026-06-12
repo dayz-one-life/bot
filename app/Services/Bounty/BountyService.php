@@ -132,6 +132,38 @@ class BountyService
         $b->update(['ended_at' => $now, 'end_reason' => $reason]);
     }
 
+    /**
+     * @return array{active:bool, gamertag?:string, playtime_seconds?:int,
+     *               life_started_at?:?string, runner_up_gap_seconds?:?int}
+     */
+    public function status(?CarbonImmutable $now = null): array
+    {
+        $now = $now ?? CarbonImmutable::now();
+        $active = Bounty::active();
+        if (! $active) return ['active' => false];
+
+        $life = Life::find($active->life_id);
+        $target = Player::find($active->player_id);
+        $holderPt = $life ? $this->livePlaytime($life, $now) : 0;
+
+        // Runner-up = highest live-playtime eligible open life that isn't the holder.
+        $cutoff = $now->subHours((int) config('bounty.activity_window_hours'));
+        $runnerPt = null;
+        foreach (Life::whereNull('ended_at')->whereHas('player', fn ($q) => $q->where('last_seen_at', '>=', $cutoff))->get() as $other) {
+            if ($other->id === $active->life_id) continue;
+            $pt = $this->livePlaytime($other, $now);
+            if ($runnerPt === null || $pt > $runnerPt) $runnerPt = $pt;
+        }
+
+        return [
+            'active' => true,
+            'gamertag' => $target?->gamertag,
+            'playtime_seconds' => $holderPt,
+            'life_started_at' => $life?->started_at?->toIso8601String(),
+            'runner_up_gap_seconds' => $runnerPt === null ? null : $holderPt - $runnerPt,
+        ];
+    }
+
     /** Highest live-playtime open life among recently-active players above the floor; null if none. */
     public function currentLeader(CarbonImmutable $now): ?Life
     {
