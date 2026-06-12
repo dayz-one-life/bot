@@ -32,6 +32,25 @@ it('parses environmental and self deaths', function () {
     expect($this->parser->parseDeath('10:00:00 | Player "A" (DEAD) (id=A=) killed by FallDamage')['cause'])->toBe('environment');
 });
 
+it('parses a PvP death with no distance', function () {
+    $line = '10:00:00 | Player "Victim" (DEAD) (id=V=) killed by Player "Killer" (id=K=) with Knife';
+    $r = $this->parser->parseDeath($line);
+    expect($r['cause'])->toBe('pvp');
+    expect($r['weapon'])->toBe('Knife');
+    expect($r['distance'])->toBeNull();
+});
+
+it('parses a PvP death for a multi-word player name', function () {
+    $line = '10:00:00 | Player "John Doe" (DEAD) (id=V=) killed by Player "Jane Smith" (id=K=) with M4A1 from 12.0 meters';
+    $r = $this->parser->parseDeath($line);
+    expect($r['victim'])->toBe('John Doe');
+    expect($r['killer'])->toBe('Jane Smith');
+});
+
+it('classifies an unrecognized death tail as unknown', function () {
+    expect($this->parser->parseDeath('10:00:00 | Player "A" (DEAD) (id=A=) vanished mysteriously')['cause'])->toBe('unknown');
+});
+
 it('ignores non-fatal hit lines', function () {
     $line = '10:00:00 | Player "A" (id=A=)[HP: 50] hit by Player "B" (id=B=) into Torso';
     expect($this->parser->parseDeath($line))->toBeNull();
