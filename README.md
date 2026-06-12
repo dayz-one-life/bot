@@ -6,10 +6,12 @@ It ingests a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs and reconstruct
 player's **lives**, **play sessions**, and **playtime** from connect / disconnect / death /
 server-reboot events.
 
-> **Status — Plans 1–2 done.** ADM ingestion + life/playtime tracking (Plan 1) and the
-> **banning layer** (Plan 2: death → 12h ban via Nitrado, auto-expiry, reconcile) are
-> implemented and verified. **Unban tokens, Discord linking, and slash commands** arrive in
-> Plan 3. See `docs/superpowers/specs/` and `docs/superpowers/plans/` for the design and roadmap.
+> **Status — Plans 1–3 done.** ADM ingestion + life/playtime tracking (Plan 1), the
+> **banning layer** (Plan 2: death → 12h ban via Nitrado, auto-expiry, reconcile), and the
+> **linking + unban-token economy** (Plan 3: `/link`, `/referrer`, `/unban`, `/unbans`,
+> monthly rewards) are implemented and verified. **Read views (`/bans`, `/referrals`,
+> `/players`) and admin commands** are deferred to Plan 4. See `docs/superpowers/specs/` and
+> `docs/superpowers/plans/` for the design and roadmap.
 
 ## Requirements
 
@@ -106,7 +108,25 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
   after `go_live_at` and aren't yet banned (idempotent via `lives.ban_issued`).
 - `app/Services/BanExpiryService.php` — 60s service: lifts expired bans, reconciles Nitrado.
 - `app/Services/IngestAdmService.php` — 60s service wrapping the ingestor + death-ban pass.
+- `app/Services/Tokens/{LinkService,ReferrerService,RewardService,RedemptionService}.php` — the
+  unban-token economy: link a gamertag (+1 token), set a referrer, monthly grants (+1 base
+  +1/active referral), and spend a token to lift a temporary ban.
+- `app/Services/MonthlyRewardService.php` — hourly service; runs the monthly grant on month
+  rollover (idempotent) and DMs recipients.
+- `app/SlashCommands/{Link,Referrer,Unban,Unbans}Command.php` — the player slash commands.
 - `app/Console/Commands/VerifyIngestionCommand.php` — the `adm:verify` report.
+
+## Player commands
+
+- `/link gamertag [referrer]` — link your Discord to a gamertag (autocomplete); first link
+  grants **1 unban token**. Optionally name who referred you.
+- `/referrer gamertag` — set your referrer later (only if unset; locked once set).
+- `/unban [player]` — spend a token to lift a **temporary** ban for yourself or another player
+  (autocomplete lists currently temp-banned gamertags). Honors `BAN_DRY_RUN`.
+- `/unbans` — show your unban-token balance.
+
+Monthly (on the 1st), every linked player receives **+1** token plus **+1** for each referred
+player who connected during the previous month.
 
 ## Tests
 
