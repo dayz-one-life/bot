@@ -36,11 +36,16 @@ class RedemptionService
             ->whereNotNull('expires_at')->where('expires_at', '>', $now)->exists();
         if (! $activeTemp) return ['status' => 'no_active_ban'];
 
-        // Lift first; deduct only after a successful unban.
+        // Lift first; deduct only after a successful unban. The unban (Nitrado HTTP +
+        // DB) and the token deduction are deliberately NOT one atomic unit — we never
+        // hold a DB transaction open across the Nitrado call. In this single-process
+        // bot, interactions are serialized by the event loop, so a double-spend race
+        // isn't reachable in practice; the guarded decrement below additionally prevents
+        // any unsigned-column underflow if it ever were.
         $this->bans->unban($target->gamertag, "Unban token spent by {$spender->gamertag}");
 
         $remaining = DB::transaction(function () use ($spender, $target) {
-            $spender->decrement('unban_tokens');
+            Player::where('id', $spender->id)->where('unban_tokens', '>=', 1)->decrement('unban_tokens');
             $target->increment('used_tokens');
             return $spender->fresh()->unban_tokens;
         });

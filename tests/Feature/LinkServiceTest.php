@@ -62,3 +62,16 @@ it('does not re-grant a token on a second link attempt by an already-linked user
     $this->link->link('discord-1', 'Alice', null);
     expect(Player::where('gamertag', 'Alice')->first()->unban_tokens)->toBe(1);
 });
+
+it('does not grant a token when link_rewarded is already true (anti-farm guard)', function () {
+    // A previously-rewarded gamertag that was unlinked keeps link_rewarded=true,
+    // so re-linking it grants no new token.
+    $p = seenPlayer('Alice');
+    $p->update(['link_rewarded' => true]);
+
+    $result = $this->link->link('discord-1', 'Alice', null);
+
+    expect($result['status'])->toBe('linked');
+    expect($result['tokenGranted'])->toBeFalse();
+    expect(Player::where('gamertag', 'Alice')->first()->unban_tokens)->toBe(0);
+});
