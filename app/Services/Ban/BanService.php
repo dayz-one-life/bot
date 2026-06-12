@@ -51,4 +51,22 @@ class BanService
 
         return $ban;
     }
+
+    public function unban(string $gamertag, string $reason): void
+    {
+        if (! $this->dryRun) {
+            $this->nitrado->removeBan($gamertag);
+        }
+
+        $player = Player::where('gamertag', $gamertag)->first();
+        if (! $player) return;
+
+        $active = Ban::where('player_id', $player->id)->where('expired', false)->get();
+        $original = $active->first()->reason ?? null;
+        if ($active->isNotEmpty()) {
+            Ban::whereIn('id', $active->pluck('id'))->update(['expired' => true, 'expires_at' => CarbonImmutable::now()]);
+        }
+
+        $this->notifier->unbanned($player, $reason, $original);
+    }
 }
