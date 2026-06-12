@@ -34,17 +34,19 @@ class LifeTracker
      */
     public function death(array $death, \DateTimeImmutable $ts): void
     {
-        $player = Player::firstOrCreate(['gamertag' => $death['victim']]);
-        $this->touch($player, $ts); // sole writer of first_seen_at / last_seen_at
+        $player = Player::where('gamertag', $death['victim'])->first();
+        if (! $player) return; // never-seen player, only a (duplicate) death line — ignore
+        $this->touch($player, $ts);
 
         if ($open = $player->openSession()) {
             $this->closeSession($open, $ts, 'clean');
         }
 
-        $life = $player->openLife() ?? Life::create([
-            'player_id' => $player->id,
-            'started_at' => $ts,
-        ]);
+        // A death only ends an OPEN life. With no open life this is a duplicate
+        // death-log line for an already-ended life (DayZ logs some deaths as
+        // multiple lines) — ignore it rather than fabricating a zero-duration life.
+        $life = $player->openLife();
+        if (! $life) return;
 
         $life->update([
             'ended_at' => $ts,

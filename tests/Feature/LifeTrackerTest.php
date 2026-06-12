@@ -64,11 +64,20 @@ it('opens a new life on the next connect after a death', function () {
     expect($player->openLife())->not->toBeNull();
 });
 
-it('records a death with no open life as a closed zero-duration life', function () {
+it('ignores a duplicate death-log line for a life that already ended', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->death(['victim' => 'Alice', 'cause' => 'pvp', 'killer' => 'Bob'], at('2026-06-11T10:20:00Z'));
+    // DayZ logs a second bare "(DEAD)" line for the same death moments later (no reconnect between).
+    $this->tracker->death(['victim' => 'Alice', 'cause' => 'unknown', 'killer' => null], at('2026-06-11T10:20:23Z'));
+
+    $alice = App\Models\Player::where('gamertag', 'Alice')->first();
+    expect($alice->lives()->count())->toBe(1);                       // no spurious second life
+    expect($alice->lives()->first()->death_cause)->toBe('pvp');      // original cause preserved
+});
+
+it('ignores a death for a player never seen connecting', function () {
     $this->tracker->death(['victim' => 'Ghost', 'cause' => 'drowned', 'killer' => null], at('2026-06-11T10:00:00Z'));
-    $player = App\Models\Player::where('gamertag', 'Ghost')->first();
-    expect($player->lives()->count())->toBe(1);
-    expect($player->openLife())->toBeNull();
+    expect(App\Models\Player::where('gamertag', 'Ghost')->exists())->toBeFalse();
 });
 
 it('closes all open sessions on reboot but keeps lives open', function () {
