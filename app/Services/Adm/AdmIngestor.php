@@ -9,10 +9,15 @@ use App\Services\State\BotState;
 
 class AdmIngestor
 {
+    private PositionRecorder $positions;
+
     public function __construct(
         private AdmParser $parser,
         private LifeTracker $tracker,
-    ) {}
+        ?PositionRecorder $positions = null,
+    ) {
+        $this->positions = $positions ?? new PositionRecorder();
+    }
 
     /**
      * One ingestion tick. Processes the newest file every tick; drains up to
@@ -103,9 +108,13 @@ class AdmIngestor
             if ($localTs === null) continue;
             $ts = $this->fromMs($localTs + $offsetMs);
 
-            if ($c = $this->parser->parseConnect($raw)) { $this->tracker->connect($c['gamertag'], $ts); continue; }
-            if ($d = $this->parser->parseDisconnect($raw)) { $this->tracker->disconnect($d['gamertag'], $ts); continue; }
-            if ($k = $this->parser->parseDeath($raw)) { $this->tracker->death($k, $ts); continue; }
+            if ($c = $this->parser->parseConnect($raw)) { $this->tracker->connect($c['gamertag'], $ts); }
+            elseif ($d = $this->parser->parseDisconnect($raw)) { $this->tracker->disconnect($d['gamertag'], $ts); }
+            elseif ($k = $this->parser->parseDeath($raw)) { $this->tracker->death($k, $ts); }
+
+            if (($pos = $this->parser->parsePosition($raw)) !== null) {
+                $this->positions->record($pos['gamertag'], $pos['x'], $pos['y'], $ts);
+            }
         }
 
         return $total;
