@@ -164,3 +164,11 @@ it('reports the active bounty with runner-up gap', function () {
     expect($s['playtime_seconds'])->toBe(10 * 3600);
     expect($s['runner_up_gap_seconds'])->toBe(3 * 3600);
 });
+
+it('ignores sub-floor players when computing the runner-up gap', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()]);
+    activeLife('SubFloor', 1800); // 30 min < 2h floor — must NOT count as runner-up
+    $s = $this->svc->status($this->now);
+    expect($s['runner_up_gap_seconds'])->toBeNull();
+});

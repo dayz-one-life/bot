@@ -35,6 +35,9 @@ class BountyService
     public function run(?CarbonImmutable $now = null): void
     {
         $now = $now ?? CarbonImmutable::now();
+        // Gate on go_live like DeathBanService. A weaker check than DeathBanService's
+        // per-life cutoff suffices here: a bounty is only ever PLACED after go_live, so
+        // any life it resolves is inherently post-go_live.
         if (! $this->state->get('go_live_at')) return;
 
         DB::transaction(function () use ($now) {
@@ -98,7 +101,9 @@ class BountyService
             return;
         }
 
-        // Clean claim: award tokens (guarded by token_awarded so a re-tick can't double-pay).
+        // Clean claim: award tokens. Idempotent because Bounty::active() returns null
+        // once ended_at is set, so a re-tick never re-enters this branch. token_awarded
+        // is kept as an audit/reporting flag only.
         Player::where('id', $killer->id)->increment('unban_tokens', $this->tokenReward);
         $active->update([
             'ended_at' => $now,
@@ -148,10 +153,12 @@ class BountyService
 
         // Runner-up = highest live-playtime eligible open life that isn't the holder.
         $cutoff = $now->subHours((int) config('bounty.activity_window_hours'));
+        $floor = (int) config('bounty.min_playtime_hours') * 3600;
         $runnerPt = null;
         foreach (Life::whereNull('ended_at')->whereHas('player', fn ($q) => $q->where('last_seen_at', '>=', $cutoff))->get() as $other) {
             if ($other->id === $active->life_id) continue;
             $pt = $this->livePlaytime($other, $now);
+            if ($pt < $floor) continue;
             if ($runnerPt === null || $pt > $runnerPt) $runnerPt = $pt;
         }
 
