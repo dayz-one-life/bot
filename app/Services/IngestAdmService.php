@@ -33,7 +33,18 @@ class IngestAdmService extends Service
         try {
             $ingestor = new AdmIngestor(new AdmParser(), new LifeTracker());
             $client = new NitradoClient($token, $serviceId);
-            $ingestor->tick($client, new BotState(), (int) env('ADM_BACKFILL_BUDGET', 15));
+            $state = new BotState();
+            $ingestor->tick($client, $state, (int) env('ADM_BACKFILL_BUDGET', 15));
+
+            $bans = new \App\Services\Ban\BanService(
+                $client,
+                new \App\Services\Ban\DiscordBanNotifier($this->discord(), env('BANS_CHANNEL_ID')),
+                dryRun: filter_var(env('BAN_DRY_RUN', false), FILTER_VALIDATE_BOOL),
+            );
+            $banned = (new \App\Services\Ban\DeathBanService($bans, $state, (int) env('BAN_DURATION_HOURS', 12)))->run();
+            if ($banned > 0) {
+                $this->console()->info("[ingest] issued {$banned} death ban(s).");
+            }
         } catch (\Throwable $e) {
             $this->console()->error('[ingest] tick failed: '.$e->getMessage());
         }
