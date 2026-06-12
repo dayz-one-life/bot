@@ -11,3 +11,11 @@ it('creates all one-life tables', function () {
 it('adds ban_issued to lives', function () {
     expect(Illuminate\Support\Facades\Schema::hasColumn('lives', 'ban_issued'))->toBeTrue();
 });
+
+it('creates the bounty tables', function () {
+    foreach (['player_positions', 'associate_overrides', 'bounties'] as $table) {
+        expect(Schema::hasTable($table))->toBeTrue();
+    }
+    expect(Schema::hasColumn('bounties', 'token_awarded'))->toBeTrue();
+    expect(Schema::hasColumn('bounties', 'end_reason'))->toBeTrue();
+});
