@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Bounty;
 use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
@@ -49,4 +50,45 @@ it('excludes players below the playtime floor', function () {
 it('excludes players who are not recently active', function () {
     activeLife('Stale', 10 * 3600, lastSeenHoursAgo: 72); // > 48h window
     expect($this->svc->currentLeader($this->now))->toBeNull();
+});
+
+it('places a bounty on the leader when none is active', function () {
+    $life = activeLife('Leader', 10 * 3600);
+    $this->svc->run($this->now);
+    $b = Bounty::active();
+    expect($b)->not->toBeNull();
+    expect($b->life_id)->toBe($life->id);
+});
+
+it('does nothing before go_live', function () {
+    $this->state->delete('go_live_at');
+    activeLife('Leader', 10 * 3600);
+    $this->svc->run($this->now);
+    expect(Bounty::count())->toBe(0);
+});
+
+it('moves the bounty when a challenger leads by more than the margin', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    activeLife('Challenger', 12 * 3600); // +2h > 5min margin
+    $this->svc->run($this->now);
+    expect(Bounty::active()->player->gamertag)->toBe('Challenger');
+    expect(Bounty::where('end_reason', 'moved')->count())->toBe(1);
+});
+
+it('does not move for a sub-margin lead', function () {
+    $held = activeLife('Holder', 10 * 3600);
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subHour()]);
+    activeLife('Barely', 10 * 3600 + 60); // +1min < 5min margin
+    $this->svc->run($this->now);
+    expect(Bounty::active()->life_id)->toBe($held->id);
+});
+
+it('drops a stale holder as inactive and moves on', function () {
+    $held = activeLife('Holder', 10 * 3600, lastSeenHoursAgo: 72); // now stale
+    Bounty::create(['player_id' => $held->player_id, 'life_id' => $held->id, 'placed_at' => now()->subDay()]);
+    $fresh = activeLife('Fresh', 4 * 3600);
+    $this->svc->run($this->now);
+    expect(Bounty::where('end_reason', 'inactive')->count())->toBe(1);
+    expect(Bounty::active()->life_id)->toBe($fresh->id);
 });
