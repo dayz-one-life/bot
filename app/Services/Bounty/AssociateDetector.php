@@ -3,6 +3,7 @@
 namespace App\Services\Bounty;
 
 use App\Models\GameSession;
+use App\Models\Life;
 use App\Models\Player;
 use App\Models\PlayerPosition;
 use Carbon\CarbonImmutable;
@@ -16,6 +17,30 @@ class AssociateDetector
         $overlap = $this->overlapScore($a->id, $b->id, $cutoff, $now);
         $sync = $this->syncScore($a->id, $b->id, $cutoff);
         return ($overlap + $sync) / 2;
+    }
+
+    /**
+     * Sparse confidence modifier, 0–1. Any mutual kill zeroes it (they fight =>
+     * not teammates). Otherwise rewards shared victims (players both have killed).
+     */
+    public function killGraphModifier(Player $a, Player $b, CarbonImmutable $now): float
+    {
+        $cutoff = $now->subDays((int) config('bounty.assoc_window_days'));
+
+        $mutual = Life::whereNotNull('ended_at')->where('ended_at', '>=', $cutoff)
+            ->where(function ($q) use ($a, $b) {
+                $q->where(fn ($w) => $w->where('player_id', $b->id)->where('death_by_gamertag', $a->gamertag))
+                  ->orWhere(fn ($w) => $w->where('player_id', $a->id)->where('death_by_gamertag', $b->gamertag));
+            })->count();
+        if ($mutual > 0) return 0.0;
+
+        $aVictims = Life::whereNotNull('ended_at')->where('ended_at', '>=', $cutoff)
+            ->where('death_by_gamertag', $a->gamertag)->pluck('player_id')->unique();
+        $bVictims = Life::whereNotNull('ended_at')->where('ended_at', '>=', $cutoff)
+            ->where('death_by_gamertag', $b->gamertag)->pluck('player_id')->unique();
+
+        $shared = $aVictims->intersect($bVictims)->count();
+        return $shared > 0 ? min(1.0, $shared / 3.0) : 0.0;
     }
 
     /** Fraction of shared 5-min time-bins where the pair were within assoc_radius_m. 0–1. */

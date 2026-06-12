@@ -76,3 +76,22 @@ it('scores proximity 0.0 when bins never overlap', function () {
     playerPos($a, '2026-06-12T09:00:00Z', 0, 0); playerPos($b, '2026-06-12T10:00:00Z', 0, 0);
     expect($this->detector->proximityScore($a, $b, $this->now))->toBe(0.0);
 });
+
+it('returns 0.0 kill-graph when the pair killed each other', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    // A killed B
+    Life::create(['player_id' => $b->id, 'started_at' => '2026-06-12T08:00:00Z',
+        'ended_at' => '2026-06-12T09:00:00Z', 'death_cause' => 'pvp', 'death_by_gamertag' => 'A']);
+    expect($this->detector->killGraphModifier($a, $b, $this->now))->toBe(0.0);
+});
+
+it('rewards shared victims in the kill-graph', function () {
+    $a = makePlayer('A'); $b = makePlayer('B');
+    $v = makePlayer('Victim');
+    // both A and B have killed Victim (two separate lives)
+    Life::create(['player_id' => $v->id, 'started_at' => '2026-06-12T07:00:00Z',
+        'ended_at' => '2026-06-12T07:30:00Z', 'death_cause' => 'pvp', 'death_by_gamertag' => 'A']);
+    Life::create(['player_id' => $v->id, 'started_at' => '2026-06-12T08:00:00Z',
+        'ended_at' => '2026-06-12T08:30:00Z', 'death_cause' => 'pvp', 'death_by_gamertag' => 'B']);
+    expect($this->detector->killGraphModifier($a, $b, $this->now))->toBeGreaterThan(0.0);
+});
