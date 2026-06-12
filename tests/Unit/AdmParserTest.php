@@ -97,3 +97,17 @@ it('derives the clock offset as the minimum modified_at minus filename time, sna
     // min candidate ~5h -> snaps to 5h = 18000000 ms
     expect($this->parser->deriveClockOffsetMs($files))->toBe(18000000);
 });
+
+it('parses a standalone position line', function () {
+    $r = $this->parser->parsePosition('12:34:56 | Player "Alice" (id=ABC123=) pos=<7500.5, 3200.1, 300.0>');
+    expect($r)->toBe(['gamertag' => 'Alice', 'x' => 7500.5, 'y' => 3200.1]);
+});
+
+it('parses a position embedded inside the id parentheses', function () {
+    $r = $this->parser->parsePosition('12:34:56 | Player "Bob" (id=XYZ= pos=<100.0, 200.0, 5.0>) is connected');
+    expect($r)->toBe(['gamertag' => 'Bob', 'x' => 100.0, 'y' => 200.0]);
+});
+
+it('returns null when a line carries no position', function () {
+    expect($this->parser->parsePosition('12:34:56 | Player "Bob" (id=XYZ=) is connected'))->toBeNull();
+});

@@ -117,6 +117,18 @@ class AdmParser
     }
 
     /**
+     * Harvest a horizontal position sample (x, y) from any line that names a
+     * player and carries a pos=<x, y, z> token, wherever it appears on the line.
+     * z (altitude) is dropped — proximity is judged on the horizontal plane.
+     */
+    public function parsePosition(string $raw): ?array
+    {
+        if (!preg_match('/Player "([^"]+)"/u', $raw, $p)) return null;
+        if (!preg_match('/pos=<\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)>/u', $raw, $c)) return null;
+        return ['gamertag' => $p[1], 'x' => (float) $c[1], 'y' => (float) $c[2]];
+    }
+
+    /**
      * Server-local log clock -> UTC offset in ms (add to a log ts to get UTC).
      * @param array<int,array{timestamp:\DateTimeImmutable,modifiedAt:?int}> $files
      */
