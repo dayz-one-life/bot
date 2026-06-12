@@ -9,6 +9,12 @@ class AdmParser
     private const KILL_RE = '/Player "([^"]+)" \(DEAD\) \(id=([^\s)]+)[^)]*\) killed by Player "([^"]+)" \(id=([^\s)]+)[^)]*\)(.*)$/u';
     private const WEAPON_RE = '/with (.+?)(?: from ([\d.]+) meters)?\s*$/u';
     private const DEATH_RE = '/Player "([^"]+)" \(DEAD\) \(id=([^\s)]+)[^)]*\)(.*)$/u';
+    private const HEADER_RE = '/AdminLog started on (\d{4})-(\d{2})-(\d{2}) at (\d{2}):(\d{2}):(\d{2})/';
+    private const TIME_RE = '/^(\d{2}):(\d{2}):(\d{2})/';
+
+    private const DAY_MS = 86400000;
+    private const ROLLOVER_THRESHOLD_SEC = 43200; // 12h
+    private const FIFTEEN_MIN_MS = 900000;
 
     public function parseConnect(string $raw): ?array
     {
@@ -59,5 +65,65 @@ class AdmParser
         };
 
         return ['victim' => $victim, 'id' => $id, 'cause' => $cause, 'killer' => null, 'weapon' => null, 'distance' => null];
+    }
+
+    /** Returns 'Y-m-d H:i:s' for a boot header line, else null. */
+    public function parseBoot(string $raw): ?string
+    {
+        if (!preg_match(self::HEADER_RE, $raw, $m)) return null;
+        return "{$m[1]}-{$m[2]}-{$m[3]} {$m[4]}:{$m[5]}:{$m[6]}";
+    }
+
+    /**
+     * Per-line epoch-ms timestamps. Null for header/blank/non-event lines.
+     * @param string[] $lines
+     */
+    public function assignTimestamps(array $lines, \DateTimeImmutable $fallbackDate): array
+    {
+        $out = array_fill(0, count($lines), null);
+        $dayStart = null; // epoch ms at UTC midnight of the current log date
+        $lastSec = -1;
+
+        foreach ($lines as $i => $raw) {
+            if ($raw === '' || $raw === null) continue;
+
+            if (preg_match(self::HEADER_RE, $raw, $h)) {
+                $dayStart = gmmktime(0, 0, 0, (int) $h[2], (int) $h[3], (int) $h[1]) * 1000;
+                $lastSec = (int) $h[4] * 3600 + (int) $h[5] * 60 + (int) $h[6];
+                continue;
+            }
+
+            if (!preg_match(self::TIME_RE, $raw, $t)) continue;
+            $sec = (int) $t[1] * 3600 + (int) $t[2] * 60 + (int) $t[3];
+
+            if ($dayStart === null) {
+                $dayStart = gmmktime(0, 0, 0,
+                    (int) $fallbackDate->format('n'),
+                    (int) $fallbackDate->format('j'),
+                    (int) $fallbackDate->format('Y')) * 1000;
+            } elseif ($lastSec - $sec > self::ROLLOVER_THRESHOLD_SEC) {
+                $dayStart += self::DAY_MS;
+            }
+            $lastSec = $sec;
+            $out[$i] = $dayStart + $sec * 1000;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Server-local log clock -> UTC offset in ms (add to a log ts to get UTC).
+     * @param array<int,array{timestamp:\DateTimeImmutable,modifiedAt:?int}> $files
+     */
+    public function deriveClockOffsetMs(array $files): int
+    {
+        $best = null;
+        foreach ($files as $f) {
+            if (!($f['timestamp'] instanceof \DateTimeImmutable) || !is_int($f['modifiedAt'] ?? null)) continue;
+            $candidate = $f['modifiedAt'] * 1000 - (int) ($f['timestamp']->getTimestamp() * 1000);
+            if ($best === null || $candidate < $best) $best = $candidate;
+        }
+        if ($best === null) return 0;
+        return (int) (round($best / self::FIFTEEN_MIN_MS) * self::FIFTEEN_MIN_MS);
     }
 }

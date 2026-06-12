@@ -61,3 +61,31 @@ it('ignores a fatal hit line so the death is only counted once', function () {
     $line = '10:00:00 | Player "A" (DEAD) (id=A=)[HP: 0] hit by Player "B" (id=B=) into Head';
     expect($this->parser->parseDeath($line))->toBeNull();
 });
+
+it('detects a server boot header timestamp', function () {
+    $r = $this->parser->parseBoot('AdminLog started on 2026-06-11 at 14:30:00');
+    expect($r)->toBe('2026-06-11 14:30:00');
+});
+
+it('assigns timestamps from the header and bumps a day at midnight', function () {
+    $lines = [
+        'AdminLog started on 2026-06-11 at 23:59:00',
+        '23:59:30 | Player "A" (id=A=) is connected',
+        '00:00:30 | Player "A" (id=A=) has been disconnected',
+    ];
+    $fallback = new DateTimeImmutable('2026-06-11T00:00:00Z');
+    $ts = $this->parser->assignTimestamps($lines, $fallback);
+
+    expect($ts[0])->toBeNull();                       // header line is not an event
+    expect($ts[1])->toBe(strtotime('2026-06-11T23:59:30Z') * 1000);
+    expect($ts[2])->toBe(strtotime('2026-06-12T00:00:30Z') * 1000); // bumped a day
+});
+
+it('derives the clock offset as the minimum modified_at minus filename time, snapped to 15 min', function () {
+    $files = [
+        ['timestamp' => new DateTimeImmutable('2026-06-11T10:00:00Z'), 'modifiedAt' => strtotime('2026-06-11T15:00:05Z')],
+        ['timestamp' => new DateTimeImmutable('2026-06-11T11:00:00Z'), 'modifiedAt' => strtotime('2026-06-11T16:20:00Z')],
+    ];
+    // min candidate ~5h -> snaps to 5h = 18000000 ms
+    expect($this->parser->deriveClockOffsetMs($files))->toBe(18000000);
+});
