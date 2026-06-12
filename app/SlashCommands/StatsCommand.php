@@ -7,21 +7,21 @@ use App\Services\Stats\PlayerStatsService;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
 
-class PlayersCommand extends SlashCommand
+class StatsCommand extends SlashCommand
 {
     /**
      * The command name.
      *
      * @var string
      */
-    protected $name = 'players';
+    protected $name = 'stats';
 
     /**
      * The command description.
      *
      * @var string|null
      */
-    protected $description = 'Show a player\'s lives, playtime, and deaths.';
+    protected $description = 'Show a player\'s lives, current life, playtime, and deaths.';
 
     /**
      * The command options.
@@ -47,12 +47,16 @@ class PlayersCommand extends SlashCommand
             return;
         }
         $hours = round($s['playtime_seconds'] / 3600, 1);
+        $currentLife = $s['current_life_seconds'] !== null
+            ? round($s['current_life_seconds'] / 3600, 1).'h'
+            : '—';
         $status = $s['alive'] ? 'alive' : 'dead';
         $linked = $s['linked'] ? 'yes' : 'no';
         $this->message(
             "**{$s['gamertag']}** — {$status}\n"
             ."• Lives: {$s['lives']}  • Deaths: {$s['deaths']}\n"
-            ."• Total playtime: {$hours}h  • Linked: {$linked}"
+            ."• Current life: {$currentLife}  • Total playtime: {$hours}h\n"
+            ."• Linked: {$linked}"
         )->reply($interaction, ephemeral: true);
     }
 

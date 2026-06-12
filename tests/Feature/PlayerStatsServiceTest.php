@@ -20,8 +20,18 @@ it('aggregates lives, playtime, deaths, and alive status', function () {
     expect($s['lives'])->toBe(2);
     expect($s['deaths'])->toBe(1);
     expect($s['playtime_seconds'])->toBe(2400);
+    expect($s['current_life_seconds'])->toBe(600);
     expect($s['alive'])->toBeTrue();
     expect($s['linked'])->toBeFalse();
+});
+
+it('reports null current life when the player has no open life', function () {
+    $p = Player::create(['gamertag' => 'Carol', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    Life::create(['player_id' => $p->id, 'started_at' => now()->subDay(), 'ended_at' => now()->subDay()->addHour(), 'death_cause' => 'pvp', 'playtime_seconds' => 1800]);
+
+    $s = $this->svc->statsFor('Carol');
+    expect($s['alive'])->toBeFalse();
+    expect($s['current_life_seconds'])->toBeNull();
 });
 
 it('reports linked status', function () {

@@ -124,7 +124,7 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
 - `/unban [player]` — spend a token to lift a **temporary** ban for yourself or another player
   (autocomplete lists currently temp-banned gamertags). Honors `BAN_DRY_RUN`.
 - `/unbans` — show your unban-token balance.
-- `/players gamertag` — a player's lives, total playtime, deaths, and status.
+- `/stats gamertag` — a player's lives, current life length, total playtime, deaths, and status.
 - `/bans [player]` — ban status + history for a player (yours by default).
 - `/referrals` — the players you referred and how many were active last month.
 

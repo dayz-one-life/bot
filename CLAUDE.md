@@ -77,7 +77,7 @@ Feature test, and keep the command/Service a wiring shim.
   admin ops (`AdminService`, `AdminGuard`).
 - Periodic `Service`s: `IngestAdmService` (60s: ingest + death-ban), `BanExpiryService` (60s:
   expire + reconcile), `MonthlyRewardService` (hourly: month-rollover grant + DMs).
-- `app/SlashCommands/` — `/link /referrer /unban /unbans /players /bans /referrals` + admin set;
+- `app/SlashCommands/` — `/link /referrer /unban /unbans /stats /bans /referrals` + admin set;
   admin commands `use App\SlashCommands\Concerns\GuardsAdmin` and call `denyIfNotAdmin()` first.
 
 ## Key domain rules (easy to get wrong)

@@ -8,7 +8,8 @@ class PlayerStatsService
 {
     /**
      * @return array{found:bool, gamertag?:string, lives?:int, deaths?:int,
-     *               playtime_seconds?:int, alive?:bool, linked?:bool, last_seen_at?:?string}
+     *               playtime_seconds?:int, current_life_seconds?:?int, alive?:bool,
+     *               linked?:bool, last_seen_at?:?string}
      */
     public function statsFor(string $gamertag): array
     {
@@ -28,6 +29,9 @@ class PlayerStatsService
             'lives' => (int) $player->lives_count,
             'deaths' => (int) $player->deaths_count,
             'playtime_seconds' => (int) $player->lives()->sum('playtime_seconds'),
+            'current_life_seconds' => $player->open_lives_count > 0
+                ? (int) $player->lives()->whereNull('ended_at')->orderByDesc('started_at')->value('playtime_seconds')
+                : null,
             'alive' => $player->open_lives_count > 0,
             'linked' => $player->discord_user_id !== null,
             'last_seen_at' => $player->last_seen_at?->toIso8601String(),
