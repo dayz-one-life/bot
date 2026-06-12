@@ -6,12 +6,11 @@ It ingests a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs and reconstruct
 player's **lives**, **play sessions**, and **playtime** from connect / disconnect / death /
 server-reboot events.
 
-> **Status — Plans 1–3 done.** ADM ingestion + life/playtime tracking (Plan 1), the
-> **banning layer** (Plan 2: death → 12h ban via Nitrado, auto-expiry, reconcile), and the
-> **linking + unban-token economy** (Plan 3: `/link`, `/referrer`, `/unban`, `/unbans`,
-> monthly rewards) are implemented and verified. **Read views (`/bans`, `/referrals`,
-> `/players`) and admin commands** are deferred to Plan 4. See `docs/superpowers/specs/` and
-> `docs/superpowers/plans/` for the design and roadmap.
+> **Status — Plans 1–4 done (focused core complete).** ADM ingestion + life/playtime tracking
+> (Plan 1), the **banning layer** (Plan 2), the **linking + unban-token economy** (Plan 3), and
+> the **read views + admin commands** (Plan 4) are all implemented and verified. The only
+> remaining real-world step is arming live banning (the `BAN_DRY_RUN` ops toggle below). See
+> `docs/superpowers/specs/` and `docs/superpowers/plans/` for the design and roadmap.
 
 ## Requirements
 
@@ -35,7 +34,8 @@ Configure `.env`:
 | `NITRADO_TOKEN` | Nitrado API bearer token for the server |
 | `NITRADO_SERVICE_ID` | Nitrado gameserver service id |
 | `DISCORD_TOKEN` | Discord bot token (only needed to run the live bot) |
-| `DISCORD_GUILD_ID` | Discord guild id (slash commands, Plan 3) |
+| `DISCORD_GUILD_ID` | Discord guild id (slash commands) |
+| `ADMIN_ROLE_ID` | Discord role id permitted to run admin commands (fail-closed if unset) |
 | `BANS_CHANNEL_ID` | Channel for ban/unban notifications |
 | `BAN_DURATION_HOURS` | Death-ban length, default `12` |
 | `BAN_DRY_RUN` | When `true`, record intended bans in the DB but make **no** Nitrado/Discord writes |
@@ -124,9 +124,25 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
 - `/unban [player]` — spend a token to lift a **temporary** ban for yourself or another player
   (autocomplete lists currently temp-banned gamertags). Honors `BAN_DRY_RUN`.
 - `/unbans` — show your unban-token balance.
+- `/players gamertag` — a player's lives, total playtime, deaths, and status.
+- `/bans [player]` — ban status + history for a player (yours by default).
+- `/referrals` — the players you referred and how many were active last month.
 
 Monthly (on the 1st), every linked player receives **+1** token plus **+1** for each referred
 player who connected during the previous month.
+
+## Admin commands
+
+Gated by `ADMIN_ROLE_ID` (a member must hold that role; fail-closed if unset):
+
+- `/adminban gamertag [hours] [reason]` — manually ban (omit `hours` for the default 12h; `0` =
+  permanent).
+- `/adminunban gamertag` — manually lift a ban.
+- `/adminlink user gamertag` — force-link a Discord user to a gamertag.
+- `/adminunlink user` — unlink a Discord user.
+- `/addunban gamertag amount` — grant (or remove, with a negative amount) unban tokens.
+- `/distribute-unbans [confirm]` — preview the monthly grant; run with `confirm: true` to apply
+  it (idempotent — the grant also fires automatically each month).
 
 ## Tests
 
