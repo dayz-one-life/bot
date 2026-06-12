@@ -7,3 +7,7 @@ it('creates all one-life tables', function () {
         expect(Schema::hasTable($table))->toBeTrue();
     }
 });
+
+it('adds ban_issued to lives', function () {
+    expect(Illuminate\Support\Facades\Schema::hasColumn('lives', 'ban_issued'))->toBeTrue();
+});

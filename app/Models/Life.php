@@ -11,6 +11,7 @@ class Life extends Model
         'started_at' => 'datetime',
         'ended_at' => 'datetime',
         'playtime_seconds' => 'integer',
+        'ban_issued' => 'boolean',
     ];
 
     public function player() { return $this->belongsTo(Player::class); }
