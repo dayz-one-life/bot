@@ -84,6 +84,11 @@ class AdmParser
         $dayStart = null; // epoch ms at UTC midnight of the current log date
         $lastSec = -1;
 
+        // Read the fallback date in UTC: dates are reconstructed against UTC
+        // midnight (gmmktime), so a non-UTC $fallbackDate must be normalized
+        // first or it could select the wrong calendar day.
+        $fallbackDate = $fallbackDate->setTimezone(new \DateTimeZone('UTC'));
+
         foreach ($lines as $i => $raw) {
             if ($raw === '' || $raw === null) continue;
 

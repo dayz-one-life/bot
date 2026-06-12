@@ -81,6 +81,14 @@ it('assigns timestamps from the header and bumps a day at midnight', function ()
     expect($ts[2])->toBe(strtotime('2026-06-12T00:00:30Z') * 1000); // bumped a day
 });
 
+it('reads a non-UTC fallback date in UTC', function () {
+    // 23:30 EDT on Jun 11 = 03:30 UTC on Jun 12, so the UTC calendar day is the 12th.
+    $lines = ['00:01:00 | Player "A" (id=A=) is connected'];
+    $fallback = new DateTimeImmutable('2026-06-11T23:30:00', new DateTimeZone('America/New_York'));
+    $ts = $this->parser->assignTimestamps($lines, $fallback);
+    expect($ts[0])->toBe(strtotime('2026-06-12T00:01:00Z') * 1000);
+});
+
 it('derives the clock offset as the minimum modified_at minus filename time, snapped to 15 min', function () {
     $files = [
         ['timestamp' => new DateTimeImmutable('2026-06-11T10:00:00Z'), 'modifiedAt' => strtotime('2026-06-11T15:00:05Z')],
