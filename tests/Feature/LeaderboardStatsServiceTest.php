@@ -93,3 +93,46 @@ it('includes open lives (live playtime) on the all-time board', function () {
 
     expect($this->svc->allTimeLongestLives(5)[0])->toMatchArray(['gamertag' => 'Alice', 'seconds' => 4200]);
 });
+
+/** Record a PvP kill: a victim life ended, killed by $killer. */
+function lbKill(Player $victim, string $killer, ?float $distance = null, ?string $weapon = null): void
+{
+    Life::create([
+        'player_id' => $victim->id,
+        'started_at' => now()->subHour(),
+        'ended_at' => now(),
+        'death_cause' => 'pvp',
+        'death_by_gamertag' => $killer,
+        'death_weapon' => $weapon,
+        'death_distance' => $distance,
+    ]);
+}
+
+it('counts PvP kills per killer gamertag, most first', function () {
+    $alice = lbPlayer('Alice');
+    $bob = lbPlayer('Bob');
+    $carol = lbPlayer('Carol');
+
+    // Bob kills 3, Alice kills 1
+    lbKill($carol, 'Bob');
+    lbKill($alice, 'Bob');
+    $extra = lbPlayer('Dave');
+    lbKill($extra, 'Bob');
+    lbKill($bob, 'Alice');
+
+    $rows = $this->svc->mostKills(5);
+
+    expect($rows[0])->toMatchArray(['gamertag' => 'Bob', 'kills' => 3]);
+    expect($rows[1])->toMatchArray(['gamertag' => 'Alice', 'kills' => 1]);
+});
+
+it('excludes suicides, environment deaths, and self-kills from kill counts', function () {
+    $alice = lbPlayer('Alice');
+
+    // Suicide (cause != pvp) — excluded
+    Life::create(['player_id' => $alice->id, 'started_at' => now()->subHour(), 'ended_at' => now(), 'death_cause' => 'suicide', 'death_by_gamertag' => null]);
+    // Self-attributed pvp (killer == victim) — excluded
+    Life::create(['player_id' => $alice->id, 'started_at' => now()->subHour(), 'ended_at' => now(), 'death_cause' => 'pvp', 'death_by_gamertag' => 'Alice']);
+
+    expect($this->svc->mostKills(5))->toBe([]);
+});

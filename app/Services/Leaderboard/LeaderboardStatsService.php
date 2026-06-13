@@ -4,6 +4,7 @@ namespace App\Services\Leaderboard;
 
 use App\Models\Life;
 use App\Services\Life\LivePlaytime;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Read-only queries powering the five leaderboard boards. All computed from the
@@ -61,6 +62,32 @@ class LeaderboardStatsService
         });
 
         return $this->rankBySeconds(array_values($best), $limit);
+    }
+
+    /**
+     * Count of PvP kills credited to each killer gamertag, desc.
+     * Excludes suicides/environment (cause != pvp), null killers, and self-kills
+     * (killer == victim gamertag). Tie-break: earliest kill (min ended_at).
+     *
+     * @return array<int, array{gamertag:string, kills:int}>
+     */
+    public function mostKills(int $limit): array
+    {
+        return DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->groupBy('lives.death_by_gamertag')
+            ->orderByDesc('kills')
+            ->orderByRaw('MIN(lives.ended_at) ASC')
+            ->limit($limit)
+            ->get([
+                'lives.death_by_gamertag as gamertag',
+                DB::raw('COUNT(*) as kills'),
+            ])
+            ->map(fn ($r) => ['gamertag' => $r->gamertag, 'kills' => (int) $r->kills])
+            ->all();
     }
 
     /**
