@@ -52,6 +52,8 @@ class LifeTracker
             'ended_at' => $ts,
             'death_cause' => $death['cause'],
             'death_by_gamertag' => $death['killer'],
+            'death_weapon' => $death['weapon'] ?? null,
+            'death_distance' => $death['distance'] ?? null,
         ]);
     }
 

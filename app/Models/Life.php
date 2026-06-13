@@ -12,6 +12,7 @@ class Life extends Model
         'ended_at' => 'datetime',
         'playtime_seconds' => 'integer',
         'ban_issued' => 'boolean',
+        'death_distance' => 'float',
     ];
 
     public function player() { return $this->belongsTo(Player::class); }
