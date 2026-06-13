@@ -17,6 +17,27 @@ class ReferralQueryService
             return ['linked' => false];
         }
 
+        return ['linked' => true] + $this->referralsFor($player);
+    }
+
+    /**
+     * @return array{found:bool, referrals?:array<int,array{gamertag:string,active:bool}>, activeCount?:int}
+     */
+    public function forGamertag(string $gamertag): array
+    {
+        $player = Player::where('gamertag', $gamertag)->first();
+        if (! $player) {
+            return ['found' => false];
+        }
+
+        return ['found' => true] + $this->referralsFor($player);
+    }
+
+    /**
+     * @return array{referrals:array<int,array{gamertag:string,active:bool}>, activeCount:int}
+     */
+    private function referralsFor(Player $player): array
+    {
         $now = CarbonImmutable::now();
         $prevStart = $now->subMonthNoOverflow()->startOfMonth();
         $prevEnd = $now->startOfMonth();
@@ -30,7 +51,6 @@ class ReferralQueryService
             ->all();
 
         return [
-            'linked' => true,
             'referrals' => $referrals,
             'activeCount' => collect($referrals)->where('active', true)->count(),
         ];
