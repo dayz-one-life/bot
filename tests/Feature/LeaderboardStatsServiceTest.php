@@ -184,3 +184,22 @@ it('omits players with no kills from the streak board', function () {
 
     expect($this->svc->longestKillStreaks(5))->toBe([]);
 });
+
+it('uses a half-open window: kill at started_at counts, kill at ended_at does not', function () {
+    CarbonImmutable::setTestNow('2026-06-13T20:00:00Z');
+
+    $hunter = lbPlayer('Hunter');
+    // One ended life 10:00 -> 12:00.
+    Life::create(['player_id' => $hunter->id, 'started_at' => '2026-06-13T10:00:00Z', 'ended_at' => '2026-06-13T12:00:00Z', 'playtime_seconds' => 7200]);
+
+    $mkV = function (string $tag, string $endedAt) {
+        $v = lbPlayer($tag);
+        Life::create(['player_id' => $v->id, 'started_at' => '2026-06-13T09:00:00Z', 'ended_at' => $endedAt, 'death_cause' => 'pvp', 'death_by_gamertag' => 'Hunter']);
+    };
+    $mkV('OnStart', '2026-06-13T10:00:00Z'); // exactly at started_at -> INCLUDED
+    $mkV('Inside', '2026-06-13T11:00:00Z');  // inside -> included
+    $mkV('OnEnd', '2026-06-13T12:00:00Z');   // exactly at ended_at -> EXCLUDED
+
+    // Included: OnStart + Inside = 2 (OnEnd excluded)
+    expect($this->svc->longestKillStreaks(5)[0])->toMatchArray(['gamertag' => 'Hunter', 'streak' => 2]);
+});
