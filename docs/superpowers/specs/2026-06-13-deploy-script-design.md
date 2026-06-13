@@ -67,7 +67,9 @@ All git/composer/migrate operations run in `REPO_DIR`.
 
 - Backup: `cp database/database.sqlite "database/database.sqlite.pre-${LATEST_TAG}.bak"`.
 - Record the backup path in a variable (`DB_BACKUP`) so rollback can restore it.
-- `php laracord migrate` (non-interactive; add `--force` if the command prompts in production).
+- `php laracord migrate --force` — **`--force` is required**: the deploy box runs
+  `APP_ENV=production`, so a bare `migrate` blocks on Laravel's production confirmation prompt,
+  hanging the unattended script forever.
 
 ### Phase 5 — Restart + health (`CURRENT_PHASE=restart`)
 
