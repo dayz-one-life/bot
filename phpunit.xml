@@ -19,5 +19,8 @@
         <env name="BOUNTY_POSITION_RETENTION_DAYS" value="0"/>
         <env name="CONNECTIONS_MAX_AGE_MINUTES" value="10"/>
         <env name="DEATH_FEED_MAX_AGE_MINUTES" value="10"/>
+        <env name="LEADERBOARD_ENABLED" value="true"/>
+        <env name="LEADERBOARD_REFRESH_MINUTES" value="15"/>
+        <env name="LEADERBOARD_TOP_COUNT" value="5"/>
     </php>
 </phpunit>
