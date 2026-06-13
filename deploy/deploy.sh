@@ -148,8 +148,8 @@ log_phase "RESTART"
 
 # Timestamp BEFORE restart so the journal --since window only sees this boot.
 RESTART_AT="$(date '+%Y-%m-%d %H:%M:%S')"
-sudo systemctl restart "$UNIT"
 SERVICES_RESTARTED=1
+sudo systemctl restart "$UNIT"
 log_info "Service restarted, waiting for ready marker ..."
 
 # The bot has no HTTP endpoint. "Successfully booted OneLifeBot" is the final
