@@ -23,7 +23,7 @@ it('ships a complete set of non-empty personality pools', function () {
 
 it('death pools carry the tokens their messages need', function () {
     $required = [
-        'death.pvp' => [':killer', ':victim', ':weapon', ':distance', ':expires'],
+        'death.pvp' => [':killer', ':victim', ':weapon', ':distancem', ':expires'],
         'death.pvp_noweapon' => [':killer', ':victim', ':expires'],
         'death.suicide' => [':victim', ':expires'],
         'death.environment' => [':victim', ':expires'],
