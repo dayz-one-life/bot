@@ -1,8 +1,10 @@
 <?php
 
+use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
 use App\Services\Stats\PlayerStatsService;
+use Carbon\CarbonImmutable;
 
 beforeEach(fn () => $this->svc = new PlayerStatsService());
 
@@ -37,4 +39,73 @@ it('reports null current life when the player has no open life', function () {
 it('reports linked status', function () {
     Player::create(['gamertag' => 'Bob', 'discord_user_id' => 'd-bob', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     expect($this->svc->statsFor('Bob')['linked'])->toBeTrue();
+});
+
+it('lists current-life sessions oldest-first with computed open duration', function () {
+    CarbonImmutable::setTestNow('2026-06-13T16:58:00Z');
+    $p = Player::create(['gamertag' => 'Dana', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-13T14:00:00Z', 'playtime_seconds' => 600]);
+
+    // Closed session: 14:02 -> 15:25 = 4980s
+    GameSession::create([
+        'player_id' => $p->id, 'life_id' => $life->id,
+        'connected_at' => '2026-06-13T14:02:00Z', 'disconnected_at' => '2026-06-13T15:25:00Z',
+        'duration_seconds' => 4980, 'close_reason' => 'reboot',
+    ]);
+    // Open session: 16:40 -> now(16:58) = 1080s, no duration stored
+    GameSession::create([
+        'player_id' => $p->id, 'life_id' => $life->id,
+        'connected_at' => '2026-06-13T16:40:00Z', 'disconnected_at' => null, 'duration_seconds' => null,
+    ]);
+
+    $s = (new PlayerStatsService())->statsFor('Dana');
+
+    expect($s['current_life_session_total'])->toBe(2);
+    expect($s['current_life_sessions'])->toHaveCount(2);
+
+    expect($s['current_life_sessions'][0]['connected_at'])->toStartWith('2026-06-13T14:02:00');
+    expect($s['current_life_sessions'][0]['duration_seconds'])->toBe(4980);
+    expect($s['current_life_sessions'][0]['is_open'])->toBeFalse();
+
+    expect($s['current_life_sessions'][1]['connected_at'])->toStartWith('2026-06-13T16:40:00');
+    expect($s['current_life_sessions'][1]['duration_seconds'])->toBe(1080);
+    expect($s['current_life_sessions'][1]['is_open'])->toBeTrue();
+
+    CarbonImmutable::setTestNow();
+});
+
+it('returns no current-life sessions for a dead player', function () {
+    $p = Player::create(['gamertag' => 'Eve', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => now()->subDay(), 'ended_at' => now()->subDay()->addHour(), 'death_cause' => 'pvp', 'playtime_seconds' => 1800]);
+    GameSession::create([
+        'player_id' => $p->id, 'life_id' => $life->id,
+        'connected_at' => now()->subDay(), 'disconnected_at' => now()->subDay()->addHour(),
+        'duration_seconds' => 3600, 'close_reason' => 'clean',
+    ]);
+
+    $s = (new PlayerStatsService())->statsFor('Eve');
+    expect($s['alive'])->toBeFalse();
+    expect($s['current_life_sessions'])->toBe([]);
+    expect($s['current_life_session_total'])->toBe(0);
+});
+
+it('caps the current-life session list at the 12 most recent, ascending', function () {
+    $p = Player::create(['gamertag' => 'Finn', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-13T00:00:00Z', 'playtime_seconds' => 600]);
+
+    for ($h = 0; $h < 15; $h++) {
+        $start = CarbonImmutable::parse('2026-06-13T00:00:00Z')->addHours($h);
+        GameSession::create([
+            'player_id' => $p->id, 'life_id' => $life->id,
+            'connected_at' => $start, 'disconnected_at' => $start->addMinutes(30),
+            'duration_seconds' => 1800, 'close_reason' => 'reboot',
+        ]);
+    }
+
+    $s = (new PlayerStatsService())->statsFor('Finn');
+
+    expect($s['current_life_session_total'])->toBe(15);
+    expect($s['current_life_sessions'])->toHaveCount(12);
+    expect($s['current_life_sessions'][0]['connected_at'])->toStartWith('2026-06-13T03:00:00');
+    expect($s['current_life_sessions'][11]['connected_at'])->toStartWith('2026-06-13T14:00:00');
 });

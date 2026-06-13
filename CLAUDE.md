@@ -82,7 +82,11 @@ Feature test, and keep the command/Service a wiring shim.
 - `app/Services/Tokens/` — `LinkService`, `ReferrerService`, `RewardService` (+`previewGrant`),
   `RedemptionService`.
 - `app/Services/{Stats,Admin}/` — read queries (`PlayerStatsService`, `ReferralQueryService`) and
-  admin ops (`AdminService`, `AdminGuard`).
+  admin ops (`AdminService`, `AdminGuard`). `PlayerStatsService::statsFor()` also returns
+  `current_life_sessions` (the open life's sessions, oldest-first, capped at the 12 most recent,
+  each `{connected_at, duration_seconds, is_open}` with the open session's duration computed
+  elapsed-so-far) plus `current_life_session_total` — populated **only when the player is alive**;
+  `/stats` renders these as a "Sessions this life" block (durations via `SessionDuration::human`).
 - Periodic `Service`s: `IngestAdmService` (60s: ingest + death-ban), `BanExpiryService` (60s:
   expire + reconcile), `MonthlyRewardService` (hourly: month-rollover grant + DMs).
 - `app/SlashCommands/` — `/link /referrer /unban /unbans /stats /bans /referrals` + admin set;
