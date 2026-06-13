@@ -101,6 +101,11 @@ return [
 
     'ban' => [
 
+        // NOTE: this 'death' pool is NO LONGER used for channel posts — the death feed
+        // (death.* pools, via DiscordDeathFeedNotifier) owns the public death+ban
+        // announcement (DiscordBanNotifier::postsToChannel suppresses 'ban.death'). The
+        // banned player still gets the separate 'ban.dm.death' DM below. Retained as a
+        // reference/fallback; do not re-wire the ban notifier to use it.
         'death' => [
             '⚰️ :who had ONE life and yeeted it into the void. Benched until :expires.',
             '⚰️ :who discovered the "one" in one-life the hard way. Back on :expires.',
