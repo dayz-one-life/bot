@@ -91,6 +91,38 @@ class LeaderboardStatsService
     }
 
     /**
+     * Top single PvP kills by death_distance, desc. NOT deduped (a board of
+     * individual shots). Tie-break: earliest kill (ended_at asc).
+     *
+     * @return array<int, array{killer:string, victim:string, weapon:?string, distance:float}>
+     */
+    public function longestKills(int $limit): array
+    {
+        return DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereNotNull('lives.death_distance')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->orderByDesc('lives.death_distance')
+            ->orderBy('lives.ended_at')
+            ->limit($limit)
+            ->get([
+                'lives.death_by_gamertag as killer',
+                'players.gamertag as victim',
+                'lives.death_weapon as weapon',
+                'lives.death_distance as distance',
+            ])
+            ->map(fn ($r) => [
+                'killer' => $r->killer,
+                'victim' => $r->victim,
+                'weapon' => $r->weapon,
+                'distance' => (float) $r->distance,
+            ])
+            ->all();
+    }
+
+    /**
      * Sort by seconds desc, tie-break started_at asc, strip the sort key, take $limit.
      *
      * @param  array<int, array{gamertag:string, seconds:int, started_at:int}>  $rows

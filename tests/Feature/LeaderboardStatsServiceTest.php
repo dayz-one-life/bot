@@ -136,3 +136,20 @@ it('excludes suicides, environment deaths, and self-kills from kill counts', fun
 
     expect($this->svc->mostKills(5))->toBe([]);
 });
+
+it('ranks single kills by distance, longest first, with killer/victim/weapon', function () {
+    $bob = lbPlayer('Bob');
+    $carol = lbPlayer('Carol');
+    $dave = lbPlayer('Dave');
+
+    lbKill($carol, 'Bob', distance: 412.7, weapon: 'M24');
+    lbKill($dave, 'Bob', distance: 88.0, weapon: 'AKM');
+    // pvp kill with null distance — excluded
+    lbKill($bob, 'Carol', distance: null, weapon: 'Knife');
+
+    $rows = $this->svc->longestKills(5);
+
+    expect($rows)->toHaveCount(2);
+    expect($rows[0])->toMatchArray(['killer' => 'Bob', 'victim' => 'Carol', 'weapon' => 'M24', 'distance' => 412.7]);
+    expect($rows[1])->toMatchArray(['killer' => 'Bob', 'victim' => 'Dave', 'weapon' => 'AKM', 'distance' => 88.0]);
+});
