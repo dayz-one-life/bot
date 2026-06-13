@@ -112,3 +112,97 @@ it('does not jump ahead to the newest file while older files are pending during 
     expect($state->get('mode'))->toBe('live');                                          // now caught up
     expect(Player::where('gamertag', 'Carol')->first())->not->toBeNull();               // applied in order
 });
+
+function fakeConnectionNotifier(): App\Services\Connection\ConnectionNotifier
+{
+    return new class implements App\Services\Connection\ConnectionNotifier {
+        public array $events = [];
+
+        public function connected(string $gamertag, \DateTimeImmutable $ts): void
+        {
+            $this->events[] = ['connect', $gamertag, null];
+        }
+
+        public function disconnected(string $gamertag, \DateTimeImmutable $ts, ?int $sessionSeconds): void
+        {
+            $this->events[] = ['disconnect', $gamertag, $sessionSeconds];
+        }
+    };
+}
+
+it('announces fresh live connect and disconnect with session length', function () {
+    Carbon\CarbonImmutable::setTestNow('2026-06-13T10:30:05Z');
+    $fake = fakeConnectionNotifier();
+
+    $content = implode("\n", [
+        'AdminLog started on 2026-06-13 at 09:00:00',
+        '10:25:00 | Player "Alice" (id=A=) is connected',
+        '10:30:00 | Player "Alice" (id=A=) has been disconnected',
+    ]);
+
+    $ingestor = new App\Services\Adm\AdmIngestor(
+        new App\Services\Adm\AdmParser(),
+        new App\Services\Life\LifeTracker(),
+        connections: $fake,
+    );
+    $fallback = new DateTimeImmutable('2026-06-13T00:00:00Z');
+
+    $ingestor->processFile($content, 0, $fallback, 0, announce: true);
+
+    expect($fake->events)->toBe([
+        ['connect', 'Alice', null],
+        ['disconnect', 'Alice', 300], // 10:25 -> 10:30 = 300s
+    ]);
+
+    Carbon\CarbonImmutable::setTestNow();
+});
+
+it('does not announce during backfill (announce=false)', function () {
+    Carbon\CarbonImmutable::setTestNow('2026-06-13T10:30:05Z');
+    $fake = fakeConnectionNotifier();
+
+    $content = implode("\n", [
+        'AdminLog started on 2026-06-13 at 09:00:00',
+        '10:25:00 | Player "Alice" (id=A=) is connected',
+        '10:30:00 | Player "Alice" (id=A=) has been disconnected',
+    ]);
+
+    $ingestor = new App\Services\Adm\AdmIngestor(
+        new App\Services\Adm\AdmParser(),
+        new App\Services\Life\LifeTracker(),
+        connections: $fake,
+    );
+    $fallback = new DateTimeImmutable('2026-06-13T00:00:00Z');
+
+    // announce omitted -> defaults to false (backfill)
+    $ingestor->processFile($content, 0, $fallback, 0);
+
+    expect($fake->events)->toBe([]);
+
+    Carbon\CarbonImmutable::setTestNow();
+});
+
+it('does not announce live events older than the freshness window', function () {
+    // "now" is two hours after the events; default window is 10 minutes.
+    Carbon\CarbonImmutable::setTestNow('2026-06-13T12:30:00Z');
+    $fake = fakeConnectionNotifier();
+
+    $content = implode("\n", [
+        'AdminLog started on 2026-06-13 at 09:00:00',
+        '10:25:00 | Player "Alice" (id=A=) is connected',
+        '10:30:00 | Player "Alice" (id=A=) has been disconnected',
+    ]);
+
+    $ingestor = new App\Services\Adm\AdmIngestor(
+        new App\Services\Adm\AdmParser(),
+        new App\Services\Life\LifeTracker(),
+        connections: $fake,
+    );
+    $fallback = new DateTimeImmutable('2026-06-13T00:00:00Z');
+
+    $ingestor->processFile($content, 0, $fallback, 0, announce: true);
+
+    expect($fake->events)->toBe([]);
+
+    Carbon\CarbonImmutable::setTestNow();
+});
