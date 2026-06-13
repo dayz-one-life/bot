@@ -30,7 +30,7 @@ class LifeTracker
     }
 
     /**
-     * @param array{victim:string,cause:string,killer:?string} $death
+     * @param array{victim:string,cause:string,killer:?string,weapon?:?string,distance?:?float} $death
      */
     public function death(array $death, \DateTimeImmutable $ts): void
     {
@@ -52,6 +52,8 @@ class LifeTracker
             'ended_at' => $ts,
             'death_cause' => $death['cause'],
             'death_by_gamertag' => $death['killer'],
+            'death_weapon' => $death['weapon'] ?? null,
+            'death_distance' => $death['distance'] ?? null,
         ]);
     }
 

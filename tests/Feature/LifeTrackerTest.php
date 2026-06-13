@@ -123,3 +123,24 @@ it('returns null when disconnecting a player with no open session', function () 
 
     expect($closed)->toBeNull();
 });
+
+it('records weapon and distance for a pvp death', function () {
+    $this->tracker->connect('Alice', at('2026-06-11T10:00:00Z'));
+    $this->tracker->death([
+        'victim' => 'Alice', 'cause' => 'pvp', 'killer' => 'Bob',
+        'weapon' => 'SVD', 'distance' => 243.5,
+    ], at('2026-06-11T10:20:00Z'));
+
+    $life = App\Models\Player::where('gamertag', 'Alice')->first()->lives()->latest('started_at')->first();
+    expect($life->death_weapon)->toBe('SVD');
+    expect($life->death_distance)->toBe(243.5);
+});
+
+it('leaves weapon and distance null for a non-pvp death', function () {
+    $this->tracker->connect('Carol', at('2026-06-11T10:00:00Z'));
+    $this->tracker->death(['victim' => 'Carol', 'cause' => 'drowned', 'killer' => null], at('2026-06-11T10:20:00Z'));
+
+    $life = App\Models\Player::where('gamertag', 'Carol')->first()->lives()->latest('started_at')->first();
+    expect($life->death_weapon)->toBeNull();
+    expect($life->death_distance)->toBeNull();
+});
