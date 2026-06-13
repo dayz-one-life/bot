@@ -28,9 +28,9 @@ journalctl -u one-life-bot -f           # live logs
 /opt/one-life-bot/deploy/deploy.sh
 ```
 
-It runs six phases — preflight, fetch, build (`composer install --no-dev`), migrate
-(`php laracord migrate --force`), restart, ready-check — and **rolls back automatically** on any
-failure (restores the previous tag *and* the SQLite file). Run it as `acab`; it uses `sudo` only
+It runs seven phases — preflight, fetch, build (`composer install --no-dev`), migrate
+(`php laracord migrate --force`), restart, ready-check, cleanup — and **rolls back automatically** on
+any failure (restores the previous tag *and* the SQLite file). Run it as `acab`; it uses `sudo` only
 for `systemctl`.
 
 - Requires a clean working tree and at least one strict semver tag on `origin` (produced by the
@@ -40,8 +40,11 @@ for `systemctl`.
   Services boot (the bot has no HTTP health endpoint). The check matches the name-independent prefix
   and strips ANSI codes, so it survives a differing `APP_NAME` and decorated journal output; it also
   fails fast (with a journal tail) if the unit crash-loops during startup.
-- Each deploy writes a `database/database.sqlite.pre-<tag>.bak` snapshot. These accumulate — delete
-  old ones once you're confident in the release: `rm database/database.sqlite.pre-*.bak`.
+- Each deploy writes a `database/database.sqlite.pre-<tag>.bak` snapshot. After a successful deploy
+  the **cleanup** phase finds the older snapshots (all but this run's) and, when run interactively,
+  prompts before removing them — keeping the newest as a manual rollback safety net. Non-interactive
+  runs (cron/CI) skip the prompt and leave every snapshot in place. To prune by hand:
+  `rm database/database.sqlite.pre-*.bak`.
 - The script calls `sudo systemctl` for the restart. Running it by hand, you'll be prompted for
   your password once. **To run it unattended (cron, CI), grant passwordless sudo for just those
   commands**, e.g. a `/etc/sudoers.d/one-life-bot` line:
