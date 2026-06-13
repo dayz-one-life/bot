@@ -88,3 +88,24 @@ it('returns no current-life sessions for a dead player', function () {
     expect($s['current_life_sessions'])->toBe([]);
     expect($s['current_life_session_total'])->toBe(0);
 });
+
+it('caps the current-life session list at the 12 most recent, ascending', function () {
+    $p = Player::create(['gamertag' => 'Finn', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-13T00:00:00Z', 'playtime_seconds' => 600]);
+
+    for ($h = 0; $h < 15; $h++) {
+        $start = CarbonImmutable::parse('2026-06-13T00:00:00Z')->addHours($h);
+        GameSession::create([
+            'player_id' => $p->id, 'life_id' => $life->id,
+            'connected_at' => $start, 'disconnected_at' => $start->addMinutes(30),
+            'duration_seconds' => 1800, 'close_reason' => 'reboot',
+        ]);
+    }
+
+    $s = (new PlayerStatsService())->statsFor('Finn');
+
+    expect($s['current_life_session_total'])->toBe(15);
+    expect($s['current_life_sessions'])->toHaveCount(12);
+    expect($s['current_life_sessions'][0]['connected_at'])->toStartWith('2026-06-13T03:00:00');
+    expect($s['current_life_sessions'][11]['connected_at'])->toStartWith('2026-06-13T14:00:00');
+});
