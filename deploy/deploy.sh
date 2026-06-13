@@ -198,7 +198,46 @@ if ! health_check; then
 fi
 log_success "Bot is ready"
 
-# ─── Phase 6: Done ───────────────────────────────────────────────────────────
+# ─── Phase 6: Cleanup ────────────────────────────────────────────────────────
+# The deploy has succeeded and the bot is serving — we are past the point where a
+# failure should roll back. Detach the ERR trap and relax errexit so a declined
+# prompt or an rm hiccup can never trigger a rollback of a healthy deploy.
+CURRENT_PHASE="cleanup"
+trap - ERR
+set +e
+log_phase "CLEANUP"
+
+# Every deploy snapshots the SQLite file to <db>.pre-<tag>.bak (see MIGRATE); they
+# accumulate one per release. "Stale" = all of them EXCEPT this run's snapshot
+# ($DB_BACKUP), which we keep as a manual rollback safety net.
+STALE_BACKUPS=()
+while IFS= read -r b; do
+  [[ -z "$b" || "$b" == "$DB_BACKUP" ]] && continue
+  STALE_BACKUPS+=("$b")
+done < <(ls -1t "${DB_PATH}".pre-*.bak 2>/dev/null)
+
+if [[ ${#STALE_BACKUPS[@]} -eq 0 ]]; then
+  log_info "No stale database backups to clean up."
+elif [[ ! -t 0 ]]; then
+  # Non-interactive (cron/CI): never delete without a human — just report.
+  log_warn "${#STALE_BACKUPS[@]} stale database backup(s) present; skipping cleanup (non-interactive)."
+else
+  log_warn "Found ${#STALE_BACKUPS[@]} stale database backup(s):"
+  for b in "${STALE_BACKUPS[@]}"; do
+    log_info "  $b ($(du -h "$b" 2>/dev/null | cut -f1))"
+  done
+  log_info "Keeping this deploy's snapshot: $DB_BACKUP"
+  printf "  ${YELLOW}Remove these %d stale backup(s)? [y/N] ${RESET}" "${#STALE_BACKUPS[@]}"
+  read -r REPLY
+  if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+    rm -f "${STALE_BACKUPS[@]}"
+    log_success "Removed ${#STALE_BACKUPS[@]} stale backup(s)."
+  else
+    log_info "Left stale backups in place."
+  fi
+fi
+
+# ─── Phase 7: Done ───────────────────────────────────────────────────────────
 ELAPSED=$(( $(date +%s) - START_TIME ))
 log_phase "DONE"
 echo -e "\n  ${GREEN}Deployed $LATEST_TAG in ${ELAPSED}s${RESET}\n"
