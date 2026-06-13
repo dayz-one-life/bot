@@ -44,6 +44,10 @@ Configure `.env`:
 | `ADM_BACKFILL_BUDGET` | Max older ADM files drained per ingestion tick, default `15` |
 | `CONNECTIONS_CHANNEL_ID` | Channel for player connect/disconnect announcements (unset = feature off) |
 | `CONNECTIONS_MAX_AGE_MINUTES` | Suppress connect/disconnect events older than this many minutes (stale-backlog guard), default `10` |
+| `LEADERBOARD_CHANNEL_ID` | Channel for the auto-updating leaderboard embed (unset = feature off) |
+| `LEADERBOARD_REFRESH_MINUTES` | How often to refresh the embed, default `15` |
+| `LEADERBOARD_TOP_COUNT` | Players shown per board, default `5` |
+| `LEADERBOARD_ENABLED` | Master toggle, default `true` |
 
 ## Verify ingestion against real data (the Plan 1 milestone)
 
@@ -211,6 +215,26 @@ Only **live** events are announced. Two guards keep it quiet:
   lines.
 
 Leave `CONNECTIONS_CHANNEL_ID` unset to disable the feature entirely (the notifier safely no-ops).
+
+## Leaderboard
+
+When `LEADERBOARD_CHANNEL_ID` is set, the bot posts (or edits in place) a single Discord embed
+every `LEADERBOARD_REFRESH_MINUTES` minutes (default 15) with five boards:
+
+| Board | What it shows |
+| --- | --- |
+| Longest life alive | Top players by current live playtime |
+| All-time longest life | Top players by their best completed life's playtime (one entry per player) |
+| Most kills | Top players by total kill count across all lives |
+| Longest kill streak | Top players by their best consecutive-kill streak (one entry per player) |
+| Longest-distance kills | Top confirmed kills sorted by distance (metres) |
+
+The embed message id is persisted in `bot_state` so the bot edits the same message on each
+refresh rather than spamming the channel. Gamertags are shown as plain backticked text —
+**never @-mentions** (read-only board, high-volume context).
+
+Set `LEADERBOARD_ENABLED=false` or leave `LEADERBOARD_CHANNEL_ID` unset to disable.
+Not gated by `BAN_DRY_RUN` (purely read-only).
 
 ## Tests
 
