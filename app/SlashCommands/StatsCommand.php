@@ -3,9 +3,9 @@
 namespace App\SlashCommands;
 
 use App\Services\Connection\SessionDuration;
-use Carbon\CarbonImmutable;
 use App\Services\Lookup\GamertagLookup;
 use App\Services\Stats\PlayerStatsService;
+use Carbon\CarbonImmutable;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
 
