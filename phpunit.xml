@@ -17,5 +17,6 @@
         <env name="BOUNTY_ASSOC_WEIGHT_COPRES" value="0.35"/>
         <env name="BOUNTY_ASSOC_WEIGHT_KILLG" value="0.10"/>
         <env name="BOUNTY_POSITION_RETENTION_DAYS" value="0"/>
+        <env name="CONNECTIONS_MAX_AGE_MINUTES" value="10"/>
     </php>
 </phpunit>

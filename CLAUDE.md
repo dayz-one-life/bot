@@ -56,7 +56,8 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 
 `.env` keys: `NITRADO_TOKEN`, `NITRADO_SERVICE_ID` (the one-life server is **18196786**),
 `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `BANS_CHANNEL_ID`, `ADMIN_ROLE_ID`, `BAN_DURATION_HOURS=12`,
-`BAN_DRY_RUN`, `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
+`BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_MAX_AGE_MINUTES=10`,
+`ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
 `BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`). `.env` is
 git-ignored — never commit secrets.
 
@@ -100,6 +101,13 @@ Feature test, and keep the command/Service a wiring shim.
   gamertag text** (a mention there would ping no one useful / be a self-mention). When adding
   Discord output, follow this split: `toChannel(...)` may mention; ephemeral `reply` and `toUser`
   DMs do not.
+- **Connection announcements** — `app/Services/Connection/`: `ConnectionNotifier` (interface) +
+  `DiscordConnectionNotifier` / `NullConnectionNotifier`, plus the pure `SessionDuration` humanizer.
+  `IngestAdmService` posts a one-line `🟢 connected` / `🔴 disconnected · on for 1h 23m` to
+  `CONNECTIONS_CHANNEL_ID` for **live, fresh** events only — gated by the ingestor's `$isLive` flag
+  plus a `CONNECTIONS_MAX_AGE_MINUTES` (default 10) freshness window that suppresses stale
+  post-restart backlog. **Deliberately never @-mentions** (high-volume channel) — an intentional
+  exception to the "public posts mention" rule above.
 - **Nickname on link** — `/link` (invoker) and `/adminlink` (target user) set the member's server
   nickname to their gamertag, best-effort via `app/SlashCommands/Concerns/RenamesToGamertag`
   (swallows failures; needs the bot to have Manage Nicknames and a role above the target — and it

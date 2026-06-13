@@ -104,3 +104,22 @@ it('continues the same life when a player reconnects after a reboot', function (
     expect($alice->lives()->count())->toBe(1);           // same life
     expect($alice->openSession())->not->toBeNull();
 });
+
+it('returns the closed session with its duration on disconnect', function () {
+    $tracker = new App\Services\Life\LifeTracker();
+    $tracker->connect('Alice', new DateTimeImmutable('2026-06-13T10:00:00Z'));
+
+    $closed = $tracker->disconnect('Alice', new DateTimeImmutable('2026-06-13T10:30:00Z'));
+
+    expect($closed)->toBeInstanceOf(App\Models\GameSession::class);
+    expect($closed->duration_seconds)->toBe(1800);
+    expect($closed->close_reason)->toBe('clean');
+});
+
+it('returns null when disconnecting a player with no open session', function () {
+    $tracker = new App\Services\Life\LifeTracker();
+
+    $closed = $tracker->disconnect('Ghost', new DateTimeImmutable('2026-06-13T10:00:00Z'));
+
+    expect($closed)->toBeNull();
+});

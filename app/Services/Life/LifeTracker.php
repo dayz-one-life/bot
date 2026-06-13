@@ -62,15 +62,18 @@ class LifeTracker
         );
     }
 
-    public function disconnect(string $gamertag, \DateTimeImmutable $ts): void
+    public function disconnect(string $gamertag, \DateTimeImmutable $ts): ?GameSession
     {
         $player = Player::where('gamertag', $gamertag)->first();
-        if (!$player) return;
+        if (! $player) return null;
         $this->touch($player, $ts);
 
         if ($open = $player->openSession()) {
             $this->closeSession($open, $ts, 'clean');
+            return $open; // closeSession set duration_seconds/close_reason on this instance
         }
+
+        return null;
     }
 
     protected function closeSession(GameSession $session, \DateTimeImmutable $ts, string $reason): void
