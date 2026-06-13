@@ -44,3 +44,12 @@ it('reconciles: active DB bans missing from Nitrado are re-added', function () {
 
     expect(collect($this->postedValues)->contains(fn ($v) => str_contains($v, 'Active')))->toBeTrue();
 });
+
+it('does NOT push active DB bans to Nitrado during reconcile in dry-run mode', function () {
+    makeBan('Active', '2026-06-12T20:00:00Z');  // active; Nitrado fake returns only "Stale"
+
+    $svc = new BanExpiryService();
+    $svc->sweep(new BanService(new NitradoClient('t', 1), new NullBanNotifier(), dryRun: true), new NitradoClient('t', 1));
+
+    expect(collect($this->postedValues)->contains(fn ($v) => str_contains($v, 'Active')))->toBeFalse();
+});
