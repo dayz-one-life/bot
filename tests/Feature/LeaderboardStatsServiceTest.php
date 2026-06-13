@@ -153,3 +153,34 @@ it('ranks single kills by distance, longest first, with killer/victim/weapon', f
     expect($rows[0])->toMatchArray(['killer' => 'Bob', 'victim' => 'Carol', 'weapon' => 'M24', 'distance' => 412.7]);
     expect($rows[1])->toMatchArray(['killer' => 'Bob', 'victim' => 'Dave', 'weapon' => 'AKM', 'distance' => 88.0]);
 });
+
+it('computes the longest kill streak within a single life, per player', function () {
+    CarbonImmutable::setTestNow('2026-06-13T20:00:00Z');
+
+    $hunter = lbPlayer('Hunter');
+
+    // Hunter life #1: 10:00 -> 12:00 (2 kills inside)
+    Life::create(['player_id' => $hunter->id, 'started_at' => '2026-06-13T10:00:00Z', 'ended_at' => '2026-06-13T12:00:00Z', 'playtime_seconds' => 7200]);
+    // Hunter life #2: 14:00 -> open (3 kills inside) -> streak 3
+    Life::create(['player_id' => $hunter->id, 'started_at' => '2026-06-13T14:00:00Z', 'playtime_seconds' => 1000]);
+
+    $mkV = function (string $tag, string $endedAt) {
+        $v = lbPlayer($tag);
+        Life::create(['player_id' => $v->id, 'started_at' => '2026-06-13T09:00:00Z', 'ended_at' => $endedAt, 'death_cause' => 'pvp', 'death_by_gamertag' => 'Hunter']);
+    };
+    $mkV('V1', '2026-06-13T10:30:00Z');
+    $mkV('V2', '2026-06-13T11:45:00Z');
+    $mkV('V3', '2026-06-13T15:00:00Z');
+    $mkV('V4', '2026-06-13T16:00:00Z');
+    $mkV('V5', '2026-06-13T19:00:00Z');
+
+    expect($this->svc->longestKillStreaks(5)[0])->toMatchArray(['gamertag' => 'Hunter', 'streak' => 3]);
+});
+
+it('omits players with no kills from the streak board', function () {
+    CarbonImmutable::setTestNow('2026-06-13T20:00:00Z');
+    $p = lbPlayer('Quiet');
+    Life::create(['player_id' => $p->id, 'started_at' => '2026-06-13T10:00:00Z', 'playtime_seconds' => 100]);
+
+    expect($this->svc->longestKillStreaks(5))->toBe([]);
+});

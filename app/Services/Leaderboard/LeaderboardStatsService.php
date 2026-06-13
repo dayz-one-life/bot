@@ -3,7 +3,9 @@
 namespace App\Services\Leaderboard;
 
 use App\Models\Life;
+use App\Models\Player;
 use App\Services\Life\LivePlaytime;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -120,6 +122,70 @@ class LeaderboardStatsService
                 'distance' => (float) $r->distance,
             ])
             ->all();
+    }
+
+    /**
+     * Longest run of kills inside a single life, one entry per killer (their best
+     * life). A kill counts toward the killer's life whose window
+     * [started_at, ended_at ?? now) contains the victim's ended_at.
+     * Tie-break: earliest life start.
+     *
+     * @return array<int, array{gamertag:string, streak:int}>
+     */
+    public function longestKillStreaks(int $limit): array
+    {
+        $now = CarbonImmutable::now()->getTimestamp();
+
+        // All kills as (killer => list of kill unix-timestamps).
+        $killsByKiller = [];
+        DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereNotNull('lives.ended_at')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->get(['lives.death_by_gamertag as killer', 'lives.ended_at as ts'])
+            ->each(function ($row) use (&$killsByKiller) {
+                $killsByKiller[$row->killer][] = CarbonImmutable::parse($row->ts)->getTimestamp();
+            });
+
+        $rows = [];
+        foreach ($killsByKiller as $killer => $timestamps) {
+            $player = Player::where('gamertag', $killer)->first();
+            if (! $player) {
+                continue; // killer never tracked as a player -> no life windows
+            }
+
+            $best = 0;
+            $bestStart = null;
+            foreach ($player->lives as $life) {
+                $start = $life->started_at->getTimestamp();
+                $end = $life->ended_at?->getTimestamp() ?? $now;
+
+                $count = 0;
+                foreach ($timestamps as $ts) {
+                    if ($ts >= $start && $ts < $end) {
+                        $count++;
+                    }
+                }
+
+                if ($count > $best || ($count === $best && $bestStart !== null && $start < $bestStart)) {
+                    $best = $count;
+                    $bestStart = $start;
+                }
+            }
+
+            if ($best > 0) {
+                $rows[] = ['gamertag' => $killer, 'streak' => $best, 'started_at' => $bestStart];
+            }
+        }
+
+        usort($rows, fn ($a, $b) => $b['streak'] <=> $a['streak'] ?: $a['started_at'] <=> $b['started_at']);
+
+        return array_map(
+            fn ($r) => ['gamertag' => $r['gamertag'], 'streak' => $r['streak']],
+            array_slice($rows, 0, $limit)
+        );
     }
 
     /**
