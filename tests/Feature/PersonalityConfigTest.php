@@ -39,6 +39,16 @@ it('death pools carry the tokens their messages need', function () {
     }
 });
 
+it('never places "until"/"til" before :expires (it renders as a relative "in 12 hours")', function () {
+    $deathPools = ['death.pvp', 'death.pvp_noweapon', 'death.suicide', 'death.environment', 'death.misc'];
+
+    foreach ($deathPools as $key) {
+        foreach (config("personality.{$key}") as $line) {
+            expect($line)->not->toMatch('/\b(?:un)?til :expires/i', "{$key} reads \"…til in 12 hours\": {$line}");
+        }
+    }
+});
+
 it('keeps bounty.ended neutral about payouts', function () {
     foreach (config('personality.bounty.ended') as $line) {
         foreach (['token', 'reward', 'paid', 'claim'] as $word) {
