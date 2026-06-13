@@ -44,17 +44,30 @@ class BanService
             ]);
         }
 
+        // Dry run is silent: no Nitrado write AND no Discord notification — only the
+        // intended ban is recorded in the DB (verify there before the cutover).
         if (! $this->dryRun) {
             $this->nitrado->addBan($gamertag);
+            $this->notifier->banned($ban, $player, $isExtension);
         }
-        $this->notifier->banned($ban, $player, $isExtension);
 
         return $ban;
     }
 
-    public function unban(string $gamertag, string $reason): void
+    /**
+     * Lift a ban. The DB is always updated (bookkeeping); the Nitrado removal and the
+     * Discord notification fire only when we actually touch the live server.
+     *
+     * In dry-run mode the automated callers (expiry sweep) must NOT write to Nitrado.
+     * A manual admin unban / token redemption passes $force = true: lifting a ban is a
+     * deliberate corrective action that must reach the real server even during dry run,
+     * so admins can clear erroneous live bans regardless of the dry-run lever.
+     */
+    public function unban(string $gamertag, string $reason, bool $force = false): void
     {
-        if (! $this->dryRun) {
+        $hitNitrado = $force || ! $this->dryRun;
+
+        if ($hitNitrado) {
             $this->nitrado->removeBan($gamertag);
         }
 
@@ -65,6 +78,15 @@ class BanService
         if ($active->isEmpty()) return; // nothing was actually lifted — don't notify
 
         Ban::whereIn('id', $active->pluck('id'))->update(['expired' => true, 'expires_at' => CarbonImmutable::now()]);
-        $this->notifier->unbanned($player, $reason, $active->first()->reason);
+
+        if ($hitNitrado) {
+            $this->notifier->unbanned($player, $reason, $active->first()->reason);
+        }
+    }
+
+    /** Whether this service is in dry-run mode (suppresses live Nitrado/Discord writes). */
+    public function isDryRun(): bool
+    {
+        return $this->dryRun;
     }
 }
