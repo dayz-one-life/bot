@@ -2,6 +2,7 @@
 
 namespace App\SlashCommands;
 
+use App\Services\Connection\SessionDuration;
 use App\Services\Lookup\GamertagLookup;
 use App\Services\Stats\PlayerStatsService;
 use Discord\Parts\Interactions\Interaction;
@@ -52,12 +53,30 @@ class StatsCommand extends SlashCommand
             : '—';
         $status = $s['alive'] ? 'alive' : 'dead';
         $linked = $s['linked'] ? 'yes' : 'no';
-        $this->message(
-            "**{$s['gamertag']}** — {$status}\n"
+
+        $body = "**{$s['gamertag']}** — {$status}\n"
             ."• Lives: {$s['lives']}  • Deaths: {$s['deaths']}\n"
             ."• Current life: {$currentLife}  • Total playtime: {$hours}h\n"
-            ."• Linked: {$linked}"
-        )->reply($interaction, ephemeral: true);
+            ."• Linked: {$linked}";
+
+        $sessions = $s['current_life_sessions'] ?? [];
+        if ($sessions !== []) {
+            $body .= "\n\n**Sessions this life:**";
+
+            $hidden = ($s['current_life_session_total'] ?? count($sessions)) - count($sessions);
+            if ($hidden > 0) {
+                $body .= "\n… +{$hidden} earlier sessions";
+            }
+
+            foreach ($sessions as $session) {
+                $when = \Carbon\CarbonImmutable::parse($session['connected_at'])->format('M j H:i').' UTC';
+                $duration = SessionDuration::human($session['duration_seconds']);
+                $tag = $session['is_open'] ? ' (current)' : '';
+                $body .= "\n• {$when} — {$duration}{$tag}";
+            }
+        }
+
+        $this->message($body)->reply($interaction, ephemeral: true);
     }
 
     /**
