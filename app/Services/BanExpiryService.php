@@ -64,6 +64,11 @@ class BanExpiryService extends Service
             });
 
         // 2) Reconcile: every still-active ban must be present in Nitrado.
+        // Skip entirely in dry-run mode — pushing intended (DB-only) bans to the live
+        // server here would silently defeat BAN_DRY_RUN (the reconciler bypassed the
+        // BanService dry-run gate by calling the Nitrado client directly).
+        if ($bans->isDryRun()) return;
+
         $activeTags = Ban::query()
             ->where('expired', false)
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', $now))

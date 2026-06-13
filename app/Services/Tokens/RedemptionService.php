@@ -42,7 +42,7 @@ class RedemptionService
         // bot, interactions are serialized by the event loop, so a double-spend race
         // isn't reachable in practice; the guarded decrement below additionally prevents
         // any unsigned-column underflow if it ever were.
-        $this->bans->unban($target->gamertag, "Unban token spent by {$spender->gamertag}");
+        $this->bans->unban($target->gamertag, "Unban token spent by {$spender->gamertag}", force: true);
 
         $remaining = DB::transaction(function () use ($spender, $target) {
             Player::where('id', $spender->id)->where('unban_tokens', '>=', 1)->decrement('unban_tokens');

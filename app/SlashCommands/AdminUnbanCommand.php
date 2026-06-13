@@ -35,7 +35,7 @@ class AdminUnbanCommand extends SlashCommand
             dryRun: filter_var(env('BAN_DRY_RUN', false), FILTER_VALIDATE_BOOL),
         );
 
-        $bans->unban($gamertag, 'Manual unban');
+        $bans->unban($gamertag, 'Manual unban', force: true);
 
         $this->message("✅ Unbanned **{$gamertag}**.")->reply($interaction, ephemeral: true);
     }
