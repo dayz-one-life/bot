@@ -62,3 +62,34 @@ it('breaks ties on the alive board by earliest started_at', function () {
     expect($rows[0]['gamertag'])->toBe('Early'); // earlier started_at wins the tie
     expect($rows[1]['gamertag'])->toBe('Late');
 });
+
+it('ranks all-time longest lives with one entry per player (best life)', function () {
+    CarbonImmutable::setTestNow('2026-06-13T16:00:00Z');
+
+    $a = lbPlayer('Alice');
+    $b = lbPlayer('Bob');
+
+    // Alice has two lives: 1000 and 4000 -> her best (4000) should be the only Alice entry
+    Life::create(['player_id' => $a->id, 'started_at' => '2026-06-10T00:00:00Z', 'ended_at' => '2026-06-10T01:00:00Z', 'playtime_seconds' => 1000]);
+    Life::create(['player_id' => $a->id, 'started_at' => '2026-06-11T00:00:00Z', 'ended_at' => '2026-06-11T02:00:00Z', 'playtime_seconds' => 4000]);
+
+    // Bob: one ended life of 3000
+    Life::create(['player_id' => $b->id, 'started_at' => '2026-06-12T00:00:00Z', 'ended_at' => '2026-06-12T01:00:00Z', 'playtime_seconds' => 3000]);
+
+    $rows = $this->svc->allTimeLongestLives(5);
+
+    expect($rows)->toHaveCount(2);
+    expect($rows[0])->toMatchArray(['gamertag' => 'Alice', 'seconds' => 4000]);
+    expect($rows[1])->toMatchArray(['gamertag' => 'Bob', 'seconds' => 3000]);
+});
+
+it('includes open lives (live playtime) on the all-time board', function () {
+    CarbonImmutable::setTestNow('2026-06-13T16:00:00Z');
+
+    $a = lbPlayer('Alice');
+    // Open life: 600 stored + open session 15:00->16:00 (3600) = 4200
+    $life = Life::create(['player_id' => $a->id, 'started_at' => '2026-06-13T10:00:00Z', 'playtime_seconds' => 600]);
+    GameSession::create(['player_id' => $a->id, 'life_id' => $life->id, 'connected_at' => '2026-06-13T15:00:00Z']);
+
+    expect($this->svc->allTimeLongestLives(5)[0])->toMatchArray(['gamertag' => 'Alice', 'seconds' => 4200]);
+});
