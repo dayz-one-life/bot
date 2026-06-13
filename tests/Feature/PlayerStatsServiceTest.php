@@ -73,3 +73,18 @@ it('lists current-life sessions oldest-first with computed open duration', funct
 
     CarbonImmutable::setTestNow();
 });
+
+it('returns no current-life sessions for a dead player', function () {
+    $p = Player::create(['gamertag' => 'Eve', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => now()->subDay(), 'ended_at' => now()->subDay()->addHour(), 'death_cause' => 'pvp', 'playtime_seconds' => 1800]);
+    GameSession::create([
+        'player_id' => $p->id, 'life_id' => $life->id,
+        'connected_at' => now()->subDay(), 'disconnected_at' => now()->subDay()->addHour(),
+        'duration_seconds' => 3600, 'close_reason' => 'clean',
+    ]);
+
+    $s = (new PlayerStatsService())->statsFor('Eve');
+    expect($s['alive'])->toBeFalse();
+    expect($s['current_life_sessions'])->toBe([]);
+    expect($s['current_life_session_total'])->toBe(0);
+});
