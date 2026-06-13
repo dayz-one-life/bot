@@ -24,11 +24,13 @@ class DiscordBanNotifier implements BanNotifier
         $key = self::bannedKey($ban, $isExtension);
 
         $fallbackAction = $isExtension ? 'Ban updated' : 'Player banned';
-        $this->toChannel($this->picker->pick(
-            $key,
-            [':who' => $who, ':reason' => $ban->reason, ':expires' => $expires],
-            "🔨 **{$fallbackAction}** — {$who} · {$ban->reason} · expires {$expires}"
-        ));
+        if (self::postsToChannel($key)) {
+            $this->toChannel($this->picker->pick(
+                $key,
+                [':who' => $who, ':reason' => $ban->reason, ':expires' => $expires],
+                "🔨 **{$fallbackAction}** — {$who} · {$ban->reason} · expires {$expires}"
+            ));
+        }
 
         if ($player->discord_user_id) {
             $dmFallback = "🔨 You have been **banned** from the server.\n• Reason: {$ban->reason}\n• Expires: {$expires}";
@@ -68,6 +70,17 @@ class DiscordBanNotifier implements BanNotifier
         }
 
         return $ban->source === 'auto_death' ? 'ban.death' : 'ban.manual';
+    }
+
+    /**
+     * Whether the ban notifier posts this key to the bans channel. The death feed
+     * (DiscordDeathFeedNotifier) owns the public death announcement, so ban.death is
+     * channel-suppressed here; the ban.dm.death DM is still sent. Public + static so it
+     * is unit-testable without a Discord gateway.
+     */
+    public static function postsToChannel(string $key): bool
+    {
+        return $key !== 'ban.death';
     }
 
     /**
