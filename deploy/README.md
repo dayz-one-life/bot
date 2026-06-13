@@ -35,8 +35,11 @@ for `systemctl`.
 
 - Requires a clean working tree and at least one strict semver tag on `origin` (produced by the
   `release-flow` skill). If already on the latest tag, it exits early with no changes.
-- Readiness is confirmed by polling the journal for `Successfully booted OneLifeBot` (the bot has
-  no HTTP health endpoint).
+- Readiness is confirmed by polling the journal (up to 60s) for the `Successfully booted` marker —
+  Laracord's final startup line, emitted once the Discord gateway connects and the periodic
+  Services boot (the bot has no HTTP health endpoint). The check matches the name-independent prefix
+  and strips ANSI codes, so it survives a differing `APP_NAME` and decorated journal output; it also
+  fails fast (with a journal tail) if the unit crash-loops during startup.
 - Each deploy writes a `database/database.sqlite.pre-<tag>.bak` snapshot. These accumulate — delete
   old ones once you're confident in the release: `rm database/database.sqlite.pre-*.bak`.
 - The script calls `sudo systemctl` for the restart. Running it by hand, you'll be prompted for

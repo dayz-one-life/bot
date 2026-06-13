@@ -152,22 +152,50 @@ SERVICES_RESTARTED=1
 sudo systemctl restart "$UNIT"
 log_info "Service restarted, waiting for ready marker ..."
 
-# The bot has no HTTP endpoint. "Successfully booted OneLifeBot" is the final
-# startup line — emitted only after the Discord gateway connects AND all
-# periodic Services boot.
+# The bot has no HTTP endpoint. Laracord's final startup line is
+# "Successfully booted <name> with <status>." — emitted only after the Discord
+# gateway connects AND all periodic Services boot.
+#
+# We match on the name-independent prefix "Successfully booted" rather than the
+# bot's name for two reasons:
+#   1. The name is config('app.name') (APP_NAME), which varies by host — the
+#      deploy script can't assume it.
+#   2. When the journal output is decorated, an ANSI color code is injected
+#      between "booted " and the name (Successfully booted \e[34m<name>),
+#      so a "<prefix> <name>" string would never match.
+# We strip ANSI codes first as belt-and-suspenders, then grep the clean prefix.
+READY_MARKER='Successfully booted'
+HEALTH_ATTEMPTS=30          # 30 × 2s = 60s; Discord gateway connect can exceed 20s
+HEALTH_INTERVAL=2
+
+strip_ansi() { sed -r 's/\x1b\[[0-9;]*m//g'; }
+
 health_check() {
-  for i in $(seq 1 10); do
-    log_info "Health check attempt $i/10 ..."
+  for ((i = 1; i <= HEALTH_ATTEMPTS; i++)); do
+    log_info "Health check attempt $i/$HEALTH_ATTEMPTS ..."
+
+    # Fail fast if the unit died/crash-looped instead of waiting out the window.
+    if ! systemctl is-active --quiet "$UNIT"; then
+      log_error "Unit '$UNIT' is no longer active — it crashed during startup."
+      return 1
+    fi
+
     if journalctl -u "$UNIT" --since="$RESTART_AT" --no-pager 2>/dev/null \
-        | grep -q 'Successfully booted OneLifeBot'; then
+        | strip_ansi | grep -q "$READY_MARKER"; then
       return 0
     fi
-    sleep 2
+    sleep "$HEALTH_INTERVAL"
   done
   return 1
 }
 
-health_check || { log_error "Bot did not report ready within 20s"; exit 1; }
+if ! health_check; then
+  log_error "Bot did not report ready within $((HEALTH_ATTEMPTS * HEALTH_INTERVAL))s"
+  log_error "Last 30 journal lines since restart:"
+  journalctl -u "$UNIT" --since="$RESTART_AT" --no-pager -n 30 2>/dev/null \
+    | strip_ansi >&2 || true
+  exit 1
+fi
 log_success "Bot is ready"
 
 # ─── Phase 6: Done ───────────────────────────────────────────────────────────
