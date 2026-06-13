@@ -39,3 +39,23 @@ it('lists referrals and counts those active in the previous month', function () 
     expect($byTag['A']['active'])->toBeTrue();
     expect($byTag['B']['active'])->toBeFalse();
 });
+
+it('reports not found for an unknown gamertag', function () {
+    expect($this->svc->forGamertag('Nobody')['found'])->toBeFalse();
+});
+
+it('lists a gamertag\'s referrals and counts those active in the previous month', function () {
+    $me = refPlayer('Me', 'd-me');
+    $a = refPlayer('A', 'd-a'); $a->update(['referrer_id' => $me->id]);
+    $b = refPlayer('B', 'd-b'); $b->update(['referrer_id' => $me->id]);
+    connectedAt($a, '2026-06-20T12:00:00Z'); // active in June
+    connectedAt($b, '2026-05-01T12:00:00Z'); // not active in June
+
+    $r = $this->svc->forGamertag('Me');
+    expect($r['found'])->toBeTrue();
+    expect($r['referrals'])->toHaveCount(2);
+    expect($r['activeCount'])->toBe(1);
+    $byTag = collect($r['referrals'])->keyBy('gamertag');
+    expect($byTag['A']['active'])->toBeTrue();
+    expect($byTag['B']['active'])->toBeFalse();
+});
