@@ -15,6 +15,12 @@ class PlayerStatsService
      *               current_life_sessions?:array<int, array{connected_at:string, duration_seconds:int, is_open:bool}>,
      *               current_life_session_total?:int}
      */
+    /** Resolve a Discord user id to their linked gamertag, or null if not linked. */
+    public function gamertagForDiscordUser(string $discordUserId): ?string
+    {
+        return Player::where('discord_user_id', $discordUserId)->value('gamertag');
+    }
+
     public function statsFor(string $gamertag): array
     {
         $player = Player::where('gamertag', $gamertag)->withCount([
