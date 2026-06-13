@@ -5,6 +5,7 @@ namespace App\SlashCommands;
 use App\Models\Ban;
 use App\Models\Player;
 use App\Services\Lookup\GamertagLookup;
+use App\Services\Lookup\PlayerMention;
 use Carbon\CarbonImmutable;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -61,11 +62,12 @@ class BansCommand extends SlashCommand
             ->latest('banned_at')->first();
         $total = Ban::where('player_id', $player->id)->count();
 
+        $who = (new PlayerMention())->forPlayer($player);
         if ($active) {
             $when = $active->expires_at ? "expires <t:{$active->expires_at->timestamp}:R>" : 'permanent';
-            $msg = "🔨 **{$player->gamertag}** is currently banned ({$active->reason}, {$when}). Total bans: {$total}.";
+            $msg = "🔨 {$who} is currently banned ({$active->reason}, {$when}). Total bans: {$total}.";
         } else {
-            $msg = "✅ **{$player->gamertag}** is not banned. Total bans on record: {$total}.";
+            $msg = "✅ {$who} is not banned. Total bans on record: {$total}.";
         }
         $this->message($msg)->reply($interaction, ephemeral: true);
     }

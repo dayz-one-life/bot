@@ -5,6 +5,7 @@ namespace App\SlashCommands;
 use App\Services\Ban\BanService;
 use App\Services\Ban\DiscordBanNotifier;
 use App\Services\Lookup\GamertagLookup;
+use App\Services\Lookup\PlayerMention;
 use App\Services\Nitrado\NitradoClient;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
@@ -37,7 +38,7 @@ class AdminUnbanCommand extends SlashCommand
 
         $bans->unban($gamertag, 'Manual unban');
 
-        $this->message("✅ Unbanned **{$gamertag}**.")->reply($interaction, ephemeral: true);
+        $this->message("✅ Unbanned ".(new PlayerMention())->for($gamertag).".")->reply($interaction, ephemeral: true);
     }
 
     public function autocomplete(): array

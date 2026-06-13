@@ -4,6 +4,7 @@ namespace App\Services\Ban;
 
 use App\Models\Ban;
 use App\Models\Player;
+use App\Services\Lookup\PlayerMention;
 use Discord\Discord;
 
 class DiscordBanNotifier implements BanNotifier
@@ -12,7 +13,7 @@ class DiscordBanNotifier implements BanNotifier
 
     public function banned(Ban $ban, Player $player, bool $isExtension): void
     {
-        $who = $player->discord_user_id ? "<@{$player->discord_user_id}>" : "`{$player->gamertag}`";
+        $who = (new PlayerMention())->forPlayer($player);
         $expires = $ban->expires_at ? "<t:{$ban->expires_at->timestamp}:f>" : 'never (permanent)';
         $action = $isExtension ? 'Ban updated' : 'Player banned';
         $this->toChannel("🔨 **{$action}** — {$who} · {$ban->reason} · expires {$expires}");
@@ -25,7 +26,7 @@ class DiscordBanNotifier implements BanNotifier
 
     public function unbanned(Player $player, string $reason, ?string $originalReason): void
     {
-        $who = $player->discord_user_id ? "<@{$player->discord_user_id}>" : "`{$player->gamertag}`";
+        $who = (new PlayerMention())->forPlayer($player);
         $this->toChannel("✅ **Player unbanned** — {$who} · {$reason}");
 
         if ($player->discord_user_id) {

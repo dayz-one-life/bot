@@ -4,6 +4,7 @@ namespace App\Services\Bounty;
 
 use App\Models\Bounty;
 use App\Models\Player;
+use App\Services\Lookup\PlayerMention;
 use Discord\Discord;
 
 class DiscordBountyNotifier implements BountyNotifier
@@ -12,7 +13,7 @@ class DiscordBountyNotifier implements BountyNotifier
 
     public function placed(Bounty $bounty, Player $target): void
     {
-        $this->toChannel("🎯 **Bounty placed** on `{$target->gamertag}` — kill them for an unban token!");
+        $this->toChannel("🎯 **Bounty placed** on ".(new PlayerMention())->forPlayer($target)." — kill them for an unban token!");
         if ($target->discord_user_id) {
             $this->toUser($target->discord_user_id, '🎯 A bounty has been placed on you. Watch your back.');
         }
@@ -20,7 +21,7 @@ class DiscordBountyNotifier implements BountyNotifier
 
     public function moved(Bounty $bounty, Player $target): void
     {
-        $this->toChannel("🎯 **Bounty moved** — `{$target->gamertag}` is now the longest-surviving target.");
+        $this->toChannel("🎯 **Bounty moved** — ".(new PlayerMention())->forPlayer($target)." is now the longest-surviving target.");
         if ($target->discord_user_id) {
             $this->toUser($target->discord_user_id, '🎯 The bounty is now on you. Watch your back.');
         }
@@ -28,10 +29,12 @@ class DiscordBountyNotifier implements BountyNotifier
 
     public function claimed(Bounty $bounty, Player $target, Player $killer, int $tokens): void
     {
-        $who = $killer->discord_user_id ? "<@{$killer->discord_user_id}>" : "`{$killer->gamertag}`";
-        $this->toChannel("💀 **Bounty claimed!** {$who} killed `{$target->gamertag}` and earned {$tokens} unban token(s).");
+        $mention = new PlayerMention();
+        $who = $mention->forPlayer($killer);
+        $targetDisplay = $mention->forPlayer($target);
+        $this->toChannel("💀 **Bounty claimed!** {$who} killed {$targetDisplay} and earned {$tokens} unban token(s).");
         if ($killer->discord_user_id) {
-            $this->toUser($killer->discord_user_id, "💰 You claimed the bounty on `{$target->gamertag}` and earned {$tokens} unban token(s)!");
+            $this->toUser($killer->discord_user_id, "💰 You claimed the bounty on {$targetDisplay} and earned {$tokens} unban token(s)!");
         }
     }
 
@@ -39,7 +42,7 @@ class DiscordBountyNotifier implements BountyNotifier
     {
         // Neutral wording — never reveals whether a reward was paid, so an associate
         // pair cannot confirm a farm worked.
-        $this->toChannel("🏳️ **Bounty ended** — the bounty on `{$target->gamertag}` is no longer active.");
+        $this->toChannel("🏳️ **Bounty ended** — the bounty on ".(new PlayerMention())->forPlayer($target)." is no longer active.");
     }
 
     /**
