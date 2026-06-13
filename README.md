@@ -6,11 +6,13 @@ It ingests a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs and reconstruct
 player's **lives**, **play sessions**, and **playtime** from connect / disconnect / death /
 server-reboot events.
 
-> **Status — Plans 1–4 done (focused core complete).** ADM ingestion + life/playtime tracking
-> (Plan 1), the **banning layer** (Plan 2), the **linking + unban-token economy** (Plan 3), and
-> the **read views + admin commands** (Plan 4) are all implemented and verified. The only
-> remaining real-world step is arming live banning (the `BAN_DRY_RUN` ops toggle below). See
-> `docs/superpowers/specs/` and `docs/superpowers/plans/` for the design and roadmap.
+> **Status — core + bounty + connection announcements live; deployed.** ADM ingestion +
+> life/playtime tracking (Plan 1), the **banning layer** (Plan 2), the **linking + unban-token
+> economy** (Plan 3), and the **read views + admin commands** (Plan 4) are implemented and verified,
+> as are the **bounty / associate-detection** feature and the **connection-announcements** channel.
+> The bot runs as the systemd service `one-life-bot`. The only remaining real-world step is arming
+> live banning (the `BAN_DRY_RUN` ops toggle below). See `docs/superpowers/specs/` and
+> `docs/superpowers/plans/` for the design and roadmap.
 
 ## Requirements
 
@@ -40,6 +42,8 @@ Configure `.env`:
 | `BAN_DURATION_HOURS` | Death-ban length, default `12` |
 | `BAN_DRY_RUN` | When `true`, record intended bans in the DB but make **no** Nitrado/Discord writes |
 | `ADM_BACKFILL_BUDGET` | Max older ADM files drained per ingestion tick, default `15` |
+| `CONNECTIONS_CHANNEL_ID` | Channel for player connect/disconnect announcements (unset = feature off) |
+| `CONNECTIONS_MAX_AGE_MINUTES` | Suppress connect/disconnect events older than this many minutes (stale-backlog guard), default `10` |
 
 ## Verify ingestion against real data (the Plan 1 milestone)
 
@@ -108,6 +112,9 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
   after `go_live_at` and aren't yet banned (idempotent via `lives.ban_issued`).
 - `app/Services/BanExpiryService.php` — 60s service: lifts expired bans, reconciles Nitrado.
 - `app/Services/IngestAdmService.php` — 60s service wrapping the ingestor + death-ban pass.
+- `app/Services/Connection/{ConnectionNotifier,DiscordConnectionNotifier,NullConnectionNotifier,SessionDuration}.php`
+  — posts live connect/disconnect lines to `CONNECTIONS_CHANNEL_ID` (no mentions; live + freshness
+  gated). Wired into `IngestAdmService`; `SessionDuration` formats the session length on disconnect.
 - `app/Services/Tokens/{LinkService,ReferrerService,RewardService,RedemptionService}.php` — the
   unban-token economy: link a gamertag (+1 token), set a referrer, monthly grants (+1 base
   +1/active referral), and spend a token to lift a temporary ban.
@@ -180,6 +187,30 @@ Key `config/bounty.php` env vars:
 Token awards from bounty kills are DB-only writes and fire even when `BAN_DRY_RUN=true`.
 
 Run `php laracord adm:backfill-positions` to seed historical position data (e.g. so association detection works immediately rather than accumulating over ~14 days). `--since-days=N` limits scope; `--keep` appends instead of truncating.
+
+## Connection announcements
+
+When `CONNECTIONS_CHANNEL_ID` is set, the bot posts a one-line message to that channel each time a
+player connects or disconnects:
+
+```text
+🟢 `Gamertag` connected
+🔴 `Gamertag` disconnected · on for 1h 23m
+```
+
+These posts **never @-mention** linked Discord users — it's a high-volume channel, so gamertags stay
+plain text (an intentional exception to the bot's usual mention-in-public-channels rule). The bot
+needs **View Channel + Send Messages** on the channel.
+
+Only **live** events are announced. Two guards keep it quiet:
+
+- **No backfill replay** — historical events processed while the ingestor is catching up are never
+  posted; announcing starts only once it flips to `live` mode.
+- **Freshness window** — after downtime, a restart suppresses any event older than
+  `CONNECTIONS_MAX_AGE_MINUTES` (default `10`), so the channel doesn't get a burst of hours-old
+  lines.
+
+Leave `CONNECTIONS_CHANNEL_ID` unset to disable the feature entirely (the notifier safely no-ops).
 
 ## Tests
 

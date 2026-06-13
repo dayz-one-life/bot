@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Guidance for working in this repo. Read this first; see `docs/superpowers/specs/` (design)
-and `docs/superpowers/plans/` (implementation plans 1–4 plus the 2026-06-12 bounty feature).
+and `docs/superpowers/plans/` (implementation plans 1–4, the 2026-06-12 bounty feature, and the
+2026-06-13 connection-announcements feature).
 
 ## What this is
 
@@ -10,10 +11,11 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **lives / sessions / playtime**, **bans** a player for 12h when they die, and runs an
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
-Status: Plans 1–4 **and** the bounty / associate-detection feature are implemented, tested, and
-deployed (systemd `one-life-bot`). The bounty token economy is **live** (it is not gated by
-`BAN_DRY_RUN`). The one remaining real-world step is arming live **banning** (the `BAN_DRY_RUN`
-cutover — see README).
+Status: Plans 1–4, the bounty / associate-detection feature, **and** connection announcements are
+implemented, tested, and deployed (systemd `one-life-bot`). The bounty token economy is **live** (it
+is not gated by `BAN_DRY_RUN`). Connection announcements are **live** (channel id configured;
+posts on connect/disconnect). The one remaining real-world step is arming live **banning** (the
+`BAN_DRY_RUN` cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
