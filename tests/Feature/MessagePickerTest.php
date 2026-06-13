@@ -2,6 +2,8 @@
 
 use App\Services\Personality\MessagePicker;
 
+afterEach(fn () => MessagePicker::reset());
+
 it('interpolates tokens into the chosen line', function () {
     config()->set('personality.t_interp', ['hello :name, you have :n token(s)']);
     $picker = new MessagePicker(fn (array $pool, ?int $avoid) => 0);

@@ -12,7 +12,13 @@ namespace App\Services\Personality;
  */
 class MessagePicker
 {
-    /** @var array<string,int> last-chosen index per key, shared across instances (long-running bot) */
+    /**
+     * Last-chosen index per pool key, shared process-wide across all instances.
+     * Deliberate: the same line shouldn't repeat even when a notifier is constructed
+     * fresh on each Discord event. Keyed by the config dot-key, so pools never collide.
+     *
+     * @var array<string,int>
+     */
     private static array $last = [];
 
     private \Closure $chooser;
@@ -47,6 +53,14 @@ class MessagePicker
         self::$last[$key] = $index;
 
         return strtr($pool[$index], $this->stringTokens($tokens));
+    }
+
+    /**
+     * Clear the process-wide anti-repeat state. Intended for tests.
+     */
+    public static function reset(): void
+    {
+        self::$last = [];
     }
 
     /**
