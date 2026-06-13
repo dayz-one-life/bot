@@ -107,6 +107,17 @@ Feature test, and keep the command/Service a wiring shim.
   gamertag text** (a mention there would ping no one useful / be a self-mention). When adding
   Discord output, follow this split: `toChannel(...)` may mention; ephemeral `reply` and `toUser`
   DMs do not.
+- **Message personality** — `app/Services/Personality/MessagePicker` + `config/personality.php`.
+  Every public notifier message (bounty / ban+death / connection — channel posts AND the player
+  DMs) is drawn from a pool of ≥10 cheeky, playful lines keyed by dot-key (e.g. `bounty.placed`,
+  `ban.death`, `connection.disconnected`). `pick(key, tokens, fallback)` selects a random line,
+  avoids the immediately-previous line for that key (process-wide static; `reset()` for tests),
+  interpolates `:tokens`, and returns a plain `fallback` if a pool is ever empty. Randomness is an
+  injectable closure so tests are deterministic. **Constraints baked in:** `bounty.ended` lines stay
+  neutral (never hint at a payout — associate-farm guard, asserted by a test); connection lines
+  never @-mention; DM pools use the plain gamertag. Add personality to any new public message by
+  adding a pool + one `pick()` call. Ban routing (`death` / `manual` / `extended`) is the pure
+  `DiscordBanNotifier::bannedKey()`.
 - **Connection announcements** — `app/Services/Connection/`: `ConnectionNotifier` (interface) +
   `DiscordConnectionNotifier` / `NullConnectionNotifier`, plus the pure `SessionDuration` humanizer.
   `IngestAdmService` posts a one-line `🟢 connected` / `🔴 disconnected · on for 1h 23m` to

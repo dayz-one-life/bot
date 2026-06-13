@@ -2,6 +2,7 @@
 
 namespace App\Services\Connection;
 
+use App\Services\Personality\MessagePicker;
 use Discord\Discord;
 
 /**
@@ -16,17 +17,35 @@ use Discord\Discord;
  */
 class DiscordConnectionNotifier implements ConnectionNotifier
 {
-    public function __construct(private ?Discord $discord, private ?string $channelId) {}
+    private MessagePicker $picker;
+
+    public function __construct(private ?Discord $discord, private ?string $channelId, ?MessagePicker $picker = null)
+    {
+        $this->picker = $picker ?? new MessagePicker();
+    }
 
     public function connected(string $gamertag, \DateTimeImmutable $ts): void
     {
-        $this->toChannel("🟢 `{$gamertag}` connected");
+        $tag = "`{$gamertag}`";
+        $this->toChannel($this->picker->pick('connection.connected', [':tag' => $tag], "🟢 {$tag} connected"));
     }
 
     public function disconnected(string $gamertag, \DateTimeImmutable $ts, ?int $sessionSeconds): void
     {
-        $tail = $sessionSeconds === null ? '' : ' · on for '.SessionDuration::human($sessionSeconds);
-        $this->toChannel("🔴 `{$gamertag}` disconnected{$tail}");
+        $tag = "`{$gamertag}`";
+
+        if ($sessionSeconds === null) {
+            $this->toChannel($this->picker->pick('connection.disconnected_nodur', [':tag' => $tag], "🔴 {$tag} disconnected"));
+
+            return;
+        }
+
+        $duration = SessionDuration::human($sessionSeconds);
+        $this->toChannel($this->picker->pick(
+            'connection.disconnected',
+            [':tag' => $tag, ':duration' => $duration],
+            "🔴 {$tag} disconnected · on for {$duration}"
+        ));
     }
 
     private function toChannel(string $content): void

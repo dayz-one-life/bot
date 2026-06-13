@@ -5,45 +5,77 @@ namespace App\Services\Bounty;
 use App\Models\Bounty;
 use App\Models\Player;
 use App\Services\Lookup\PlayerMention;
+use App\Services\Personality\MessagePicker;
 use Discord\Discord;
 
 class DiscordBountyNotifier implements BountyNotifier
 {
-    public function __construct(private ?Discord $discord, private ?string $channelId) {}
+    private MessagePicker $picker;
+
+    public function __construct(private ?Discord $discord, private ?string $channelId, ?MessagePicker $picker = null)
+    {
+        $this->picker = $picker ?? new MessagePicker();
+    }
 
     public function placed(Bounty $bounty, Player $target): void
     {
-        $this->toChannel("🎯 **Bounty placed** on ".(new PlayerMention())->forPlayer($target)." — kill them for an unban token!");
+        $targetDisplay = (new PlayerMention())->forPlayer($target);
+        $this->toChannel($this->picker->pick(
+            'bounty.placed',
+            [':target' => $targetDisplay],
+            "🎯 **Bounty placed** on {$targetDisplay} — kill them for an unban token!"
+        ));
         if ($target->discord_user_id) {
-            $this->toUser($target->discord_user_id, '🎯 A bounty has been placed on you. Watch your back.');
+            $this->toUser($target->discord_user_id, $this->picker->pick(
+                'bounty.dm.placed', [], '🎯 A bounty has been placed on you. Watch your back.'
+            ));
         }
     }
 
     public function moved(Bounty $bounty, Player $target): void
     {
-        $this->toChannel("🎯 **Bounty moved** — ".(new PlayerMention())->forPlayer($target)." is now the longest-surviving target.");
+        $targetDisplay = (new PlayerMention())->forPlayer($target);
+        $this->toChannel($this->picker->pick(
+            'bounty.moved',
+            [':target' => $targetDisplay],
+            "🎯 **Bounty moved** — {$targetDisplay} is now the longest-surviving target."
+        ));
         if ($target->discord_user_id) {
-            $this->toUser($target->discord_user_id, '🎯 The bounty is now on you. Watch your back.');
+            $this->toUser($target->discord_user_id, $this->picker->pick(
+                'bounty.dm.moved', [], '🎯 The bounty is now on you. Watch your back.'
+            ));
         }
     }
 
     public function claimed(Bounty $bounty, Player $target, Player $killer, int $tokens): void
     {
         $mention = new PlayerMention();
-        $who = $mention->forPlayer($killer);
+        $killerDisplay = $mention->forPlayer($killer);
         $targetDisplay = $mention->forPlayer($target);
-        $this->toChannel("💀 **Bounty claimed!** {$who} killed {$targetDisplay} and earned {$tokens} unban token(s).");
+        $this->toChannel($this->picker->pick(
+            'bounty.claimed',
+            [':killer' => $killerDisplay, ':target' => $targetDisplay, ':tokens' => $tokens],
+            "💀 **Bounty claimed!** {$killerDisplay} killed {$targetDisplay} and earned {$tokens} unban token(s)."
+        ));
         if ($killer->discord_user_id) {
-            // The DM is private (not "everyone can see"), so use the plain gamertag, not a mention.
-            $this->toUser($killer->discord_user_id, "💰 You claimed the bounty on `{$target->gamertag}` and earned {$tokens} unban token(s)!");
+            // DM stays plain gamertag (no mention).
+            $this->toUser($killer->discord_user_id, $this->picker->pick(
+                'bounty.dm.claimed',
+                [':target' => $target->gamertag, ':tokens' => $tokens],
+                "💰 You claimed the bounty on `{$target->gamertag}` and earned {$tokens} unban token(s)!"
+            ));
         }
     }
 
     public function ended(Bounty $bounty, Player $target, string $reason): void
     {
-        // Neutral wording — never reveals whether a reward was paid, so an associate
-        // pair cannot confirm a farm worked.
-        $this->toChannel("🏳️ **Bounty ended** — the bounty on ".(new PlayerMention())->forPlayer($target)." is no longer active.");
+        // Neutral wording — never reveals whether a reward was paid (associate-farm guard).
+        $targetDisplay = (new PlayerMention())->forPlayer($target);
+        $this->toChannel($this->picker->pick(
+            'bounty.ended',
+            [':target' => $targetDisplay],
+            "🏳️ **Bounty ended** — the bounty on {$targetDisplay} is no longer active."
+        ));
     }
 
     /**
