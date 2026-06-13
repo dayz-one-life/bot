@@ -59,6 +59,7 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 `.env` keys: `NITRADO_TOKEN`, `NITRADO_SERVICE_ID` (the one-life server is **18196786**),
 `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `BANS_CHANNEL_ID`, `ADMIN_ROLE_ID`, `BAN_DURATION_HOURS=12`,
 `BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_MAX_AGE_MINUTES=10`,
+`DEATH_FEED_MAX_AGE_MINUTES=10`,
 `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
 `BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`). `.env` is
 git-ignored — never commit secrets.
@@ -118,6 +119,16 @@ Feature test, and keep the command/Service a wiring shim.
   never @-mention; DM pools use the plain gamertag. Add personality to any new public message by
   adding a pool + one `pick()` call. Ban routing (`death` / `manual` / `extended`) is the pure
   `DiscordBanNotifier::bannedKey()`.
+- **Death feed** — `app/Services/DeathFeed/`: `DeathFeedComposer` (pure: picks a personality
+  pool from the death cause, renders victim/killer via `PlayerMention`, weapon/distance/relative
+  expiry) + `DeathFeedNotifier` / `DiscordDeathFeedNotifier` / `NullDeathFeedNotifier`. Driven by
+  `DeathBanService` for each reconciled live death — posts ONE merged kill/death + ban line to
+  `BANS_CHANNEL_ID` (reused). **Public post → @-mentions linked players** (victim and killer).
+  **Not gated by `BAN_DRY_RUN`** (the Ban row with its expiry exists even in dry run), so the feed
+  is live now while real Nitrado bans/DMs still wait for cutover. Freshness-gated by
+  `DEATH_FEED_MAX_AGE_MINUTES` (default 10) to suppress post-downtime backlog. `DiscordBanNotifier`
+  no longer channel-posts `ban.death` (the feed owns it) but still sends the `ban.dm.death` DM.
+  Weapon/distance are persisted on `lives` (`death_weapon`/`death_distance`).
 - **Connection announcements** — `app/Services/Connection/`: `ConnectionNotifier` (interface) +
   `DiscordConnectionNotifier` / `NullConnectionNotifier`, plus the pure `SessionDuration` humanizer.
   `IngestAdmService` posts a one-line `🟢 connected` / `🔴 disconnected · on for 1h 23m` to
