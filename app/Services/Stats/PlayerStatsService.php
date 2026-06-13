@@ -2,6 +2,7 @@
 
 namespace App\Services\Stats;
 
+use App\Models\Life;
 use App\Models\Player;
 use Carbon\CarbonImmutable;
 
@@ -55,7 +56,7 @@ class PlayerStatsService
      *
      * @return array<int, array{connected_at:string, duration_seconds:int, is_open:bool}>
      */
-    private function currentLifeSessions(?\App\Models\Life $openLife): array
+    private function currentLifeSessions(?Life $openLife): array
     {
         if (! $openLife) {
             return [];
