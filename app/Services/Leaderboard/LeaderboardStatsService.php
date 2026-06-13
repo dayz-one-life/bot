@@ -1,0 +1,206 @@
+<?php
+
+namespace App\Services\Leaderboard;
+
+use App\Models\Life;
+use App\Models\Player;
+use App\Services\Life\LivePlaytime;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Read-only queries powering the five leaderboard boards. All computed from the
+ * existing lives / game_sessions / players tables (no kills table). Heavily
+ * Feature-tested; the periodic Service and Discord notifier are thin wrappers.
+ */
+class LeaderboardStatsService
+{
+    /**
+     * Open lives ranked by live playtime (stored + open-session elapsed), desc.
+     * Tie-break: earliest started_at.
+     *
+     * @return array<int, array{gamertag:string, seconds:int}>
+     */
+    public function aliveLongestLives(int $limit): array
+    {
+        $rows = Life::query()
+            ->whereNull('ended_at')
+            ->with('player:id,gamertag')
+            ->get()
+            ->map(fn (Life $life) => [
+                'gamertag' => $life->player->gamertag,
+                'seconds' => LivePlaytime::forLife($life),
+                'started_at' => $life->started_at->getTimestamp(),
+            ])
+            ->all();
+
+        return $this->rankBySeconds($rows, $limit);
+    }
+
+    /**
+     * All lives ranked by playtime, deduped to the best life per player, desc.
+     * Open lives use live playtime; ended lives use the stored value (no extra
+     * query). Tie-break: earliest started_at.
+     *
+     * @return array<int, array{gamertag:string, seconds:int}>
+     */
+    public function allTimeLongestLives(int $limit): array
+    {
+        $best = []; // gamertag => ['gamertag','seconds','started_at']
+
+        Life::query()->with('player:id,gamertag')->get()->each(function (Life $life) use (&$best) {
+            $tag = $life->player->gamertag;
+            $seconds = $life->ended_at === null
+                ? LivePlaytime::forLife($life)
+                : (int) $life->playtime_seconds;
+
+            if (! isset($best[$tag]) || $seconds > $best[$tag]['seconds']) {
+                $best[$tag] = [
+                    'gamertag' => $tag,
+                    'seconds' => $seconds,
+                    'started_at' => $life->started_at->getTimestamp(),
+                ];
+            }
+        });
+
+        return $this->rankBySeconds(array_values($best), $limit);
+    }
+
+    /**
+     * Count of PvP kills credited to each killer gamertag, desc.
+     * Excludes suicides/environment (cause != pvp), null killers, and self-kills
+     * (killer == victim gamertag). Tie-break: earliest kill (min ended_at).
+     *
+     * @return array<int, array{gamertag:string, kills:int}>
+     */
+    public function mostKills(int $limit): array
+    {
+        return DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->groupBy('lives.death_by_gamertag')
+            ->orderByDesc('kills')
+            ->orderByRaw('MIN(lives.ended_at) ASC')
+            ->limit($limit)
+            ->get([
+                'lives.death_by_gamertag as gamertag',
+                DB::raw('COUNT(*) as kills'),
+            ])
+            ->map(fn ($r) => ['gamertag' => $r->gamertag, 'kills' => (int) $r->kills])
+            ->all();
+    }
+
+    /**
+     * Top single PvP kills by death_distance, desc. NOT deduped (a board of
+     * individual shots). Tie-break: earliest kill (ended_at asc).
+     *
+     * @return array<int, array{killer:string, victim:string, weapon:?string, distance:float}>
+     */
+    public function longestKills(int $limit): array
+    {
+        return DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereNotNull('lives.death_distance')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->orderByDesc('lives.death_distance')
+            ->orderBy('lives.ended_at')
+            ->limit($limit)
+            ->get([
+                'lives.death_by_gamertag as killer',
+                'players.gamertag as victim',
+                'lives.death_weapon as weapon',
+                'lives.death_distance as distance',
+            ])
+            ->map(fn ($r) => [
+                'killer' => $r->killer,
+                'victim' => $r->victim,
+                'weapon' => $r->weapon,
+                'distance' => (float) $r->distance,
+            ])
+            ->all();
+    }
+
+    /**
+     * Longest run of kills inside a single life, one entry per killer (their best
+     * life). A kill counts toward the killer's life whose window
+     * [started_at, ended_at ?? now) contains the victim's ended_at.
+     * Tie-break: earliest life start.
+     *
+     * @return array<int, array{gamertag:string, streak:int}>
+     */
+    public function longestKillStreaks(int $limit): array
+    {
+        $now = CarbonImmutable::now()->getTimestamp();
+
+        // All kills as (killer => list of kill unix-timestamps).
+        $killsByKiller = [];
+        DB::table('lives')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->where('lives.death_cause', 'pvp')
+            ->whereNotNull('lives.death_by_gamertag')
+            ->whereNotNull('lives.ended_at')
+            ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
+            ->get(['lives.death_by_gamertag as killer', 'lives.ended_at as ts'])
+            ->each(function ($row) use (&$killsByKiller) {
+                $killsByKiller[$row->killer][] = CarbonImmutable::parse($row->ts)->getTimestamp();
+            });
+
+        $rows = [];
+        foreach ($killsByKiller as $killer => $timestamps) {
+            $player = Player::where('gamertag', $killer)->first();
+            if (! $player) {
+                continue; // killer never tracked as a player -> no life windows
+            }
+
+            $best = 0;
+            $bestStart = null;
+            foreach ($player->lives as $life) {
+                $start = $life->started_at->getTimestamp();
+                $end = $life->ended_at?->getTimestamp() ?? $now;
+
+                $count = 0;
+                foreach ($timestamps as $ts) {
+                    if ($ts >= $start && $ts < $end) {
+                        $count++;
+                    }
+                }
+
+                if ($count > $best || ($count === $best && $bestStart !== null && $start < $bestStart)) {
+                    $best = $count;
+                    $bestStart = $start;
+                }
+            }
+
+            if ($best > 0) {
+                $rows[] = ['gamertag' => $killer, 'streak' => $best, 'started_at' => $bestStart];
+            }
+        }
+
+        usort($rows, fn ($a, $b) => $b['streak'] <=> $a['streak'] ?: $a['started_at'] <=> $b['started_at']);
+
+        return array_map(
+            fn ($r) => ['gamertag' => $r['gamertag'], 'streak' => $r['streak']],
+            array_slice($rows, 0, $limit)
+        );
+    }
+
+    /**
+     * Sort by seconds desc, tie-break started_at asc, strip the sort key, take $limit.
+     *
+     * @param  array<int, array{gamertag:string, seconds:int, started_at:int}>  $rows
+     * @return array<int, array{gamertag:string, seconds:int}>
+     */
+    private function rankBySeconds(array $rows, int $limit): array
+    {
+        usort($rows, fn ($a, $b) => $b['seconds'] <=> $a['seconds'] ?: $a['started_at'] <=> $b['started_at']);
+
+        return array_map(
+            fn ($r) => ['gamertag' => $r['gamertag'], 'seconds' => $r['seconds']],
+            array_slice($rows, 0, $limit)
+        );
+    }
+}

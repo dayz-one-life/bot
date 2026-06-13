@@ -61,8 +61,9 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 `BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_MAX_AGE_MINUTES=10`,
 `DEATH_FEED_MAX_AGE_MINUTES=10`,
 `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
-`BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`). `.env` is
-git-ignored — never commit secrets.
+`BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`), plus
+`LEADERBOARD_CHANNEL_ID`, `LEADERBOARD_REFRESH_MINUTES`, `LEADERBOARD_TOP_COUNT`,
+`LEADERBOARD_ENABLED`. `.env` is git-ignored — never commit secrets.
 
 ## Architecture
 
@@ -136,6 +137,15 @@ Feature test, and keep the command/Service a wiring shim.
   plus a `CONNECTIONS_MAX_AGE_MINUTES` (default 10) freshness window that suppresses stale
   post-restart backlog. **Deliberately never @-mentions** (high-volume channel) — an intentional
   exception to the "public posts mention" rule above.
+- **Leaderboard** — `app/Services/Leaderboard/`: `LeaderboardStatsService` (five read-only
+  boards: longest life alive/all-time, most kills, longest kill streak, longest-distance kills —
+  all computed from `lives`/`game_sessions`/`players`, no kills table), `LeaderboardComposer`
+  (pure → Discord-agnostic embed payload; plain backticked gamertags, **never @-mentions**),
+  `DiscordLeaderboardNotifier` / `NullLeaderboardNotifier` (post-or-edit a single embed, message
+  id persisted in `bot_state` as `leaderboard_message_id`/`leaderboard_channel_id`), and the
+  `LivePlaytime` helper (`app/Services/Life/`) for open-life elapsed playtime. Periodic
+  `LeaderboardService` (default 15m, `config/leaderboard.php`). Not gated by `BAN_DRY_RUN`
+  (read-only). The all-time-life and kill-streak boards dedupe to one entry per player.
 - **Nickname on link** — `/link` (invoker) and `/adminlink` (target user) set the member's server
   nickname to their gamertag, best-effort via `app/SlashCommands/Concerns/RenamesToGamertag`
   (swallows failures; needs the bot to have Manage Nicknames and a role above the target — and it

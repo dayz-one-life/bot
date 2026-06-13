@@ -243,6 +243,23 @@ return [
         ],
     ],
 
+    'leaderboard' => [
+
+        'intro' => [
+            '🏆 The standings, freshly tallied. Climb or cope.',
+            '🏆 Who\'s winning the one life? Scroll down and find out.',
+            '🏆 Updated leaderboards — bragging rights are temporary, screenshots are forever.',
+            '🏆 The numbers don\'t lie, even when you wish they would.',
+            '🏆 Fresh rankings off the server. Somebody\'s mad about their spot right now.',
+            '🏆 Current standings. Remember: every name here is one bullet from a reshuffle.',
+            '🏆 The board just refreshed. Hope you like where you landed.',
+            '🏆 Leaderboards updated. Glory to the top, condolences to everyone else.',
+            '🏆 Here\'s who\'s actually good and who just talks a big game.',
+            '🏆 The latest tally. Survive longer, shoot straighter, climb higher.',
+        ],
+
+    ],
+
     'death' => [
 
         'pvp' => [
