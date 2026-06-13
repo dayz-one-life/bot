@@ -41,6 +41,16 @@ it('reports linked status', function () {
     expect($this->svc->statsFor('Bob')['linked'])->toBeTrue();
 });
 
+it('resolves a linked discord user id to their gamertag', function () {
+    Player::create(['gamertag' => 'Bob', 'discord_user_id' => 'd-bob', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    expect($this->svc->gamertagForDiscordUser('d-bob'))->toBe('Bob');
+});
+
+it('returns null when the discord user id is not linked', function () {
+    Player::create(['gamertag' => 'Bob', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    expect($this->svc->gamertagForDiscordUser('d-nobody'))->toBeNull();
+});
+
 it('lists current-life sessions oldest-first with computed open duration', function () {
     CarbonImmutable::setTestNow('2026-06-13T16:58:00Z');
     $p = Player::create(['gamertag' => 'Dana', 'first_seen_at' => now(), 'last_seen_at' => now()]);

@@ -31,7 +31,7 @@ class StatsCommand extends SlashCommand
      * @var array
      */
     protected $options = [
-        ['name' => 'gamertag', 'description' => 'The gamertag to look up', 'type' => 3, 'required' => true, 'autocomplete' => true],
+        ['name' => 'gamertag', 'description' => 'The gamertag to look up (defaults to your linked gamertag)', 'type' => 3, 'required' => false, 'autocomplete' => true],
     ];
 
     /**
@@ -42,7 +42,21 @@ class StatsCommand extends SlashCommand
      */
     public function handle($interaction): void
     {
-        $s = (new PlayerStatsService())->statsFor((string) $this->value('gamertag'));
+        $stats = new PlayerStatsService();
+
+        $gamertag = $this->value('gamertag') !== null ? (string) $this->value('gamertag') : null;
+        if ($gamertag === null || $gamertag === '') {
+            $discordId = (string) ($interaction->member->user->id ?? $interaction->user->id);
+            $gamertag = $stats->gamertagForDiscordUser($discordId);
+            if ($gamertag === null) {
+                $this->message('⚠️ You aren\'t linked yet. Use `/link` first, or pass a gamertag.')
+                    ->reply($interaction, ephemeral: true);
+
+                return;
+            }
+        }
+
+        $s = $stats->statsFor($gamertag);
         if (! ($s['found'] ?? false)) {
             $this->message('⚠️ No player found with that gamertag.')->reply($interaction, ephemeral: true);
 
