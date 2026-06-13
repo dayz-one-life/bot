@@ -47,3 +47,18 @@ it('honours the limit on the alive board', function () {
 
     expect($this->svc->aliveLongestLives(2))->toHaveCount(2);
 });
+
+it('breaks ties on the alive board by earliest started_at', function () {
+    CarbonImmutable::setTestNow('2026-06-13T16:00:00Z');
+
+    // Two open lives with identical stored playtime and no open session -> equal seconds.
+    $early = lbPlayer('Early');
+    $late = lbPlayer('Late');
+    Life::create(['player_id' => $late->id, 'started_at' => '2026-06-13T12:00:00Z', 'playtime_seconds' => 1000]);
+    Life::create(['player_id' => $early->id, 'started_at' => '2026-06-13T08:00:00Z', 'playtime_seconds' => 1000]);
+
+    $rows = $this->svc->aliveLongestLives(5);
+
+    expect($rows[0]['gamertag'])->toBe('Early'); // earlier started_at wins the tie
+    expect($rows[1]['gamertag'])->toBe('Late');
+});
