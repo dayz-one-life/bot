@@ -7,6 +7,7 @@ it('ships a complete set of non-empty personality pools', function () {
         'ban.death', 'ban.manual', 'ban.extended', 'ban.unbanned',
         'ban.dm.death', 'ban.dm.manual', 'ban.dm.unbanned',
         'connection.connected', 'connection.disconnected', 'connection.disconnected_nodur',
+        'death.pvp', 'death.pvp_noweapon', 'death.suicide', 'death.environment', 'death.misc',
     ];
 
     foreach ($keys as $key) {
@@ -16,6 +17,24 @@ it('ships a complete set of non-empty personality pools', function () {
         foreach ($pool as $line) {
             expect($line)->toBeString();
             expect(trim($line))->not->toBe('');
+        }
+    }
+});
+
+it('death pools carry the tokens their messages need', function () {
+    $required = [
+        'death.pvp' => [':killer', ':victim', ':weapon', ':distance', ':expires'],
+        'death.pvp_noweapon' => [':killer', ':victim', ':expires'],
+        'death.suicide' => [':victim', ':expires'],
+        'death.environment' => [':victim', ':expires'],
+        'death.misc' => [':victim', ':cause', ':expires'],
+    ];
+
+    foreach ($required as $key => $tokens) {
+        foreach (config("personality.{$key}") as $line) {
+            foreach ($tokens as $token) {
+                expect(str_contains($line, $token))->toBeTrue("{$key} line missing {$token}: {$line}");
+            }
         }
     }
 });
