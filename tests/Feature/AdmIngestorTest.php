@@ -206,3 +206,61 @@ it('does not announce live events older than the freshness window', function () 
 
     Carbon\CarbonImmutable::setTestNow();
 });
+
+it('catch-up tick flips to live but does not announce any backfill events', function () {
+    Http::fake([
+        '*/gameservers' => Http::response(['status' => 'success', 'data' => ['gameserver' => [
+            'game_specific' => ['path' => '/base/', 'log_files' => []],
+        ]]]),
+        '*/file_server/list*' => Http::response(['status' => 'success', 'data' => ['entries' => [
+            ['name' => 'DayZServer_X1_x64_2026-06-10_00-00-00.ADM', 'path' => '/base/new.ADM', 'modified_at' => 1749513600],
+            ['name' => 'DayZServer_X1_x64_2026-06-09_00-00-00.ADM', 'path' => '/base/old.ADM', 'modified_at' => 1749427200],
+        ]]]),
+        '*file=*old.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/old']]]),
+        '*file=*new.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/new']]]),
+        'https://dl/old' => Http::response("00:00:00 | Player \"Zed\" (id=Z=) is connected\n00:30:00 | Player \"Zed\" (id=Z=) has been disconnected"),
+        'https://dl/new' => Http::response("01:00:00 | Player \"Zed\" (id=Z=) is connected\n01:10:00 | Player \"Zed\" (id=Z=) has been disconnected"),
+    ]);
+
+    $state = new BotState();
+    $fake = fakeConnectionNotifier();
+    $ingestor = new AdmIngestor(new AdmParser(), new LifeTracker(), connections: $fake, announceMaxAgeMinutes: 99999999);
+    $client = new NitradoClient('t', 1);
+
+    // One tick drains both files (budget 10) and flips to live...
+    $ingestor->tick($client, $state, backfillBudget: 10);
+
+    // ...the mode has flipped...
+    expect($state->get('mode'))->toBe('live');
+    // ...but the catch-up content was processed while $isLive was still false,
+    // so nothing was announced even though the freshness window is huge.
+    expect($fake->events)->toBe([]);
+});
+
+it('a tick that starts in live mode announces new connect and disconnect', function () {
+    Http::fake([
+        '*/gameservers' => Http::response(['status' => 'success', 'data' => ['gameserver' => [
+            'game_specific' => ['path' => '/base/', 'log_files' => []],
+        ]]]),
+        '*/file_server/list*' => Http::response(['status' => 'success', 'data' => ['entries' => [
+            ['name' => 'DayZServer_X1_x64_2026-06-10_00-00-00.ADM', 'path' => '/base/new.ADM', 'modified_at' => 1749513600],
+        ]]]),
+        '*file=*new.ADM*' => Http::response(['status' => 'success', 'data' => ['token' => ['url' => 'https://dl/new']]]),
+        'https://dl/new' => Http::response("00:00:00 | Player \"Zed\" (id=Z=) is connected\n00:30:00 | Player \"Zed\" (id=Z=) has been disconnected"),
+    ]);
+
+    $state = new BotState();
+    // Pre-set mode to live so $isLive === true at the start of tick().
+    $state->set('mode', 'live');
+    $state->set('go_live_at', '2026-06-13T00:00:00+00:00');
+
+    $fake = fakeConnectionNotifier();
+    // Giant freshness window so isFresh() never suppresses; we're testing the $isLive gate only.
+    $ingestor = new AdmIngestor(new AdmParser(), new LifeTracker(), connections: $fake, announceMaxAgeMinutes: 99999999);
+    $client = new NitradoClient('t', 1);
+
+    $ingestor->tick($client, $state, backfillBudget: 10);
+
+    // The live tick must have announced both the connect and the disconnect.
+    expect(array_column($fake->events, 0))->toBe(['connect', 'disconnect']);
+});
