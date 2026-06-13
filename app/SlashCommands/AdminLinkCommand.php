@@ -5,12 +5,14 @@ namespace App\SlashCommands;
 use App\Services\Admin\AdminService;
 use App\Services\Lookup\GamertagLookup;
 use App\SlashCommands\Concerns\GuardsAdmin;
+use App\SlashCommands\Concerns\RenamesToGamertag;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
 
 class AdminLinkCommand extends SlashCommand
 {
     use GuardsAdmin;
+    use RenamesToGamertag;
 
     protected $name = 'adminlink';
     protected $description = 'Admin: force-link a Discord user to a gamertag.';
@@ -32,8 +34,13 @@ class AdminLinkCommand extends SlashCommand
 
         $r = (new AdminService())->forceLink($userId, $gamertag);
 
+        if ($r['status'] === 'linked') {
+            $this->renameUserIdToGamertag($interaction, $userId, $gamertag);
+        }
+
         $msg = $r['status'] === 'linked'
             ? "✅ Linked <@{$userId}> to **{$gamertag}**."
+                . "\n_Set their server nickname to the gamertag (if the bot has Manage Nicknames and outranks them)._"
             : '⚠️ No player found with that gamertag.';
 
         $this->message($msg)->reply($interaction, ephemeral: true);

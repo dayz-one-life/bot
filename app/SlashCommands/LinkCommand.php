@@ -4,11 +4,13 @@ namespace App\SlashCommands;
 
 use App\Services\Lookup\GamertagLookup;
 use App\Services\Tokens\LinkService;
+use App\SlashCommands\Concerns\RenamesToGamertag;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
 
 class LinkCommand extends SlashCommand
 {
+    use RenamesToGamertag;
     /**
      * The command name.
      *
@@ -59,10 +61,15 @@ class LinkCommand extends SlashCommand
 
         $r = (new LinkService())->link($discordId, $gamertag, $referrer);
 
+        if ($r['status'] === 'linked') {
+            $this->renameMemberToGamertag($interaction->member, $r['gamertag']);
+        }
+
         $msg = match ($r['status']) {
             'linked' => "✅ Linked to **{$r['gamertag']}**."
                 . (($r['tokenGranted'] ?? false) ? ' You received **1 unban token**.' : '')
-                . (($r['referrer'] ?? null) ? " Referrer set to **{$r['referrer']}**." : ''),
+                . (($r['referrer'] ?? null) ? " Referrer set to **{$r['referrer']}**." : '')
+                . "\n_Your server nickname has been set to your gamertag. If it didn't change, ask an admin to check the bot's Manage Nicknames permission and role position._",
             'already_linked' => "⚠️ You are already linked. You can't re-link or change your gamertag.",
             'gamertag_not_found' => "⚠️ That gamertag isn't available — make sure you've connected to the server at least once, and that no one else has linked it.",
             'invalid_referrer' => '⚠️ Invalid referrer — pick a different, already-linked player (not yourself).',
