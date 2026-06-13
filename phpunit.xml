@@ -9,5 +9,13 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="APP_ENV" value="testing"/>
+        <!-- Pin bounty config defaults so config-assertion tests stay deterministic
+             regardless of the developer/operator .env (which legitimately tunes these). -->
+        <env name="BOUNTY_ACTIVITY_WINDOW_HOURS" value="48"/>
+        <env name="BOUNTY_ASSOC_THRESHOLD" value="0.45"/>
+        <env name="BOUNTY_ASSOC_WEIGHT_PROX" value="0.55"/>
+        <env name="BOUNTY_ASSOC_WEIGHT_COPRES" value="0.35"/>
+        <env name="BOUNTY_ASSOC_WEIGHT_KILLG" value="0.10"/>
+        <env name="BOUNTY_POSITION_RETENTION_DAYS" value="0"/>
     </php>
 </phpunit>
