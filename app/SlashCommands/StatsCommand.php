@@ -3,6 +3,7 @@
 namespace App\SlashCommands;
 
 use App\Services\Connection\SessionDuration;
+use Carbon\CarbonImmutable;
 use App\Services\Lookup\GamertagLookup;
 use App\Services\Stats\PlayerStatsService;
 use Discord\Parts\Interactions\Interaction;
@@ -69,7 +70,7 @@ class StatsCommand extends SlashCommand
             }
 
             foreach ($sessions as $session) {
-                $when = \Carbon\CarbonImmutable::parse($session['connected_at'])->format('M j H:i').' UTC';
+                $when = CarbonImmutable::parse($session['connected_at'])->format('M j H:i').' UTC';
                 $duration = SessionDuration::human($session['duration_seconds']);
                 $tag = $session['is_open'] ? ' (current)' : '';
                 $body .= "\n• {$when} — {$duration}{$tag}";
