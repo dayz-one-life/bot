@@ -34,7 +34,8 @@ class DiscordBountyNotifier implements BountyNotifier
         $targetDisplay = $mention->forPlayer($target);
         $this->toChannel("💀 **Bounty claimed!** {$who} killed {$targetDisplay} and earned {$tokens} unban token(s).");
         if ($killer->discord_user_id) {
-            $this->toUser($killer->discord_user_id, "💰 You claimed the bounty on {$targetDisplay} and earned {$tokens} unban token(s)!");
+            // The DM is private (not "everyone can see"), so use the plain gamertag, not a mention.
+            $this->toUser($killer->discord_user_id, "💰 You claimed the bounty on `{$target->gamertag}` and earned {$tokens} unban token(s)!");
         }
     }
 

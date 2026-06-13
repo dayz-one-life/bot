@@ -4,7 +4,6 @@ namespace App\SlashCommands;
 
 use App\Services\Bounty\AssociateDetector;
 use App\Services\Bounty\BountyService;
-use App\Services\Lookup\PlayerMention;
 use App\Services\Bounty\NullBountyNotifier;
 use App\Services\State\BotState;
 use Laracord\Commands\SlashCommand;
@@ -48,7 +47,7 @@ class BountyCommand extends SlashCommand
             : 'no runner-up';
 
         $this->message(
-            "🎯 **Bounty:** ".(new PlayerMention())->for($s['gamertag'])."\n"
+            "🎯 **Bounty:** `{$s['gamertag']}`\n"
             ."• Live playtime: {$hours}h\n"
             ."• {$gap}\n"
             .'Kill them (and don\'t be on their team) to earn an unban token.'

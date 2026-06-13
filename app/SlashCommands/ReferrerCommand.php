@@ -3,7 +3,6 @@
 namespace App\SlashCommands;
 
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\Services\Tokens\ReferrerService;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -53,7 +52,7 @@ class ReferrerCommand extends SlashCommand
         $r = (new ReferrerService())->setReferrer($discordId, $gamertag);
 
         $msg = match ($r['status']) {
-            'set' => '✅ Referrer set to '.(new PlayerMention())->for($r['referrer']).'.',
+            'set' => "✅ Referrer set to **{$r['referrer']}**.",
             'not_linked' => '⚠️ Link your gamertag first with `/link`.',
             'already_set' => "⚠️ Your referrer is already set and can't be changed.",
             'invalid_referrer' => '⚠️ Invalid referrer — pick a different, already-linked player (not yourself).',

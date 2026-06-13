@@ -5,7 +5,6 @@ namespace App\SlashCommands;
 use App\Services\Ban\BanService;
 use App\Services\Ban\DiscordBanNotifier;
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\Services\Nitrado\NitradoClient;
 use App\Services\Tokens\RedemptionService;
 use Discord\Parts\Interactions\Interaction;
@@ -62,7 +61,7 @@ class UnbanCommand extends SlashCommand
         $r = (new RedemptionService($bans))->redeem($discordId, $target);
 
         $msg = match ($r['status']) {
-            'unbanned' => '✅ Unbanned '.(new PlayerMention())->for($r['target']).". Tokens remaining: **{$r['remaining']}**.",
+            'unbanned' => "✅ Unbanned **{$r['target']}**. Tokens remaining: **{$r['remaining']}**.",
             'not_linked' => '⚠️ Link your gamertag first with `/link`.',
             'no_tokens' => '⚠️ You have no unban tokens.',
             'target_not_found' => '⚠️ No player found with that gamertag.',

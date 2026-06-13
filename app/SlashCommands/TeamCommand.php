@@ -5,7 +5,6 @@ namespace App\SlashCommands;
 use App\Services\Bounty\AssociateDetector;
 use App\Services\Bounty\OverrideService;
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\Models\Player;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
@@ -78,10 +77,9 @@ class TeamCommand extends SlashCommand
             return "🔍 `{$tag}` has no detected associates.";
         }
 
-        $mention = new PlayerMention();
-        $lines = $associates->map(function (Player $p) use ($player, $detector, $mention) {
+        $lines = $associates->map(function (Player $p) use ($player, $detector) {
             $score = round($detector->score($player, $p), 2);
-            return "• ".$mention->forPlayer($p)." (score {$score})";
+            return "• `{$p->gamertag}` (score {$score})";
         })->implode("\n");
 
         return "🔍 Associates of `{$tag}`:\n{$lines}";

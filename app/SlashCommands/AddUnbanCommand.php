@@ -4,7 +4,6 @@ namespace App\SlashCommands;
 
 use App\Services\Admin\AdminService;
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -29,7 +28,7 @@ class AddUnbanCommand extends SlashCommand
         $gamertag = (string) $this->value('gamertag');
         $r = (new AdminService())->grantTokens($gamertag, (int) $this->value('amount'));
         $msg = $r['status'] === 'granted'
-            ? "✅ ".(new PlayerMention())->for($gamertag)." now has **{$r['balance']}** token(s)."
+            ? "✅ **{$gamertag}** now has **{$r['balance']}** token(s)."
             : '⚠️ No player found with that gamertag.';
         $this->message($msg)->reply($interaction, ephemeral: true);
     }

@@ -5,7 +5,6 @@ namespace App\SlashCommands;
 use App\Services\Ban\BanService;
 use App\Services\Ban\DiscordBanNotifier;
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\Services\Nitrado\NitradoClient;
 use App\SlashCommands\Concerns\GuardsAdmin;
 use Discord\Parts\Interactions\Interaction;
@@ -47,7 +46,7 @@ class AdminBanCommand extends SlashCommand
             ? 'expires <t:' . $ban->expires_at->timestamp . ':R>'
             : 'permanent';
 
-        $msg = "🔨 Banned ".(new PlayerMention())->for($gamertag)." ({$reason}) — {$expiry}.";
+        $msg = "🔨 Banned **{$gamertag}** ({$reason}) — {$expiry}.";
 
         $this->message($msg)->reply($interaction, ephemeral: true);
     }

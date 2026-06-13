@@ -68,7 +68,7 @@ class LinkCommand extends SlashCommand
         $msg = match ($r['status']) {
             'linked' => "✅ Linked to **{$r['gamertag']}**."
                 . (($r['tokenGranted'] ?? false) ? ' You received **1 unban token**.' : '')
-                . (($r['referrer'] ?? null) ? ' Referrer set to '.(new \App\Services\Lookup\PlayerMention())->for($r['referrer']).'.' : '')
+                . (($r['referrer'] ?? null) ? " Referrer set to **{$r['referrer']}**." : '')
                 . "\n_Your server nickname has been set to your gamertag. If it didn't change, ask an admin to check the bot's Manage Nicknames permission and role position._",
             'already_linked' => "⚠️ You are already linked. You can't re-link or change your gamertag.",
             'gamertag_not_found' => "⚠️ That gamertag isn't available — make sure you've connected to the server at least once, and that no one else has linked it.",

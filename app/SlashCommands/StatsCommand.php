@@ -3,7 +3,6 @@
 namespace App\SlashCommands;
 
 use App\Services\Lookup\GamertagLookup;
-use App\Services\Lookup\PlayerMention;
 use App\Services\Stats\PlayerStatsService;
 use Discord\Parts\Interactions\Interaction;
 use Laracord\Commands\SlashCommand;
@@ -54,7 +53,7 @@ class StatsCommand extends SlashCommand
         $status = $s['alive'] ? 'alive' : 'dead';
         $linked = $s['linked'] ? 'yes' : 'no';
         $this->message(
-            (new PlayerMention())->for($s['gamertag'])." — {$status}\n"
+            "**{$s['gamertag']}** — {$status}\n"
             ."• Lives: {$s['lives']}  • Deaths: {$s['deaths']}\n"
             ."• Current life: {$currentLife}  • Total playtime: {$hours}h\n"
             ."• Linked: {$linked}"

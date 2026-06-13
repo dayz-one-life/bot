@@ -2,7 +2,6 @@
 
 namespace App\SlashCommands;
 
-use App\Services\Lookup\PlayerMention;
 use App\Services\Stats\ReferralQueryService;
 use Laracord\Commands\SlashCommand;
 
@@ -42,8 +41,7 @@ class ReferralsCommand extends SlashCommand
 
             return;
         }
-        $mention = new PlayerMention();
-        $lines = array_map(fn ($x) => ($x['active'] ? '🟢' : '⚪️').' '.$mention->for($x['gamertag']), $r['referrals']);
+        $lines = array_map(fn ($x) => ($x['active'] ? '🟢' : '⚪️')." {$x['gamertag']}", $r['referrals']);
         $this->message(
             "**Your referrals** ({$r['activeCount']} active last month → +{$r['activeCount']} next grant):\n".implode("\n", $lines)
         )->reply($interaction, ephemeral: true);
