@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Guidance for working in this repo. Read this first; see `docs/superpowers/specs/` (design)
-and `docs/superpowers/plans/` (implementation plans 1–4) for full detail.
+and `docs/superpowers/plans/` (implementation plans 1–4 plus the 2026-06-12 bounty feature).
 
 ## What this is
 
@@ -10,8 +10,10 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **lives / sessions / playtime**, **bans** a player for 12h when they die, and runs an
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
-Status: the focused-core spec (Plans 1–4) is fully implemented and tested. The one remaining
-real-world step is arming live banning (the `BAN_DRY_RUN` cutover — see README).
+Status: Plans 1–4 **and** the bounty / associate-detection feature are implemented, tested, and
+deployed (systemd `one-life-bot`). The bounty token economy is **live** (it is not gated by
+`BAN_DRY_RUN`). The one remaining real-world step is arming live **banning** (the `BAN_DRY_RUN`
+cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
@@ -54,7 +56,9 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 
 `.env` keys: `NITRADO_TOKEN`, `NITRADO_SERVICE_ID` (the one-life server is **18196786**),
 `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `BANS_CHANNEL_ID`, `ADMIN_ROLE_ID`, `BAN_DURATION_HOURS=12`,
-`BAN_DRY_RUN`, `ADM_BACKFILL_BUDGET=15`. `.env` is git-ignored — never commit secrets.
+`BAN_DRY_RUN`, `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
+`BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`). `.env` is
+git-ignored — never commit secrets.
 
 ## Architecture
 
@@ -90,6 +94,16 @@ Feature test, and keep the command/Service a wiring shim.
   ingest AND can be backfilled across ADM history via `adm:backfill-positions`; retention is
   governed by `BOUNTY_POSITION_RETENTION_DAYS` (0 = keep forever), separate from the detector's
   `assoc_window_days` scoring window.
+- **Gamertag rendering** — `app/Services/Lookup/PlayerMention` turns a linked gamertag into a
+  Discord mention `<@id>` (else backticked text). **Only PUBLIC channel posts mention** — the ban /
+  bounty channel announcements via the notifiers. **Ephemeral slash replies and DMs keep plain
+  gamertag text** (a mention there would ping no one useful / be a self-mention). When adding
+  Discord output, follow this split: `toChannel(...)` may mention; ephemeral `reply` and `toUser`
+  DMs do not.
+- **Nickname on link** — `/link` (invoker) and `/adminlink` (target user) set the member's server
+  nickname to their gamertag, best-effort via `app/SlashCommands/Concerns/RenamesToGamertag`
+  (swallows failures; needs the bot to have Manage Nicknames and a role above the target — and it
+  can never rename the server owner).
 
 ## Key domain rules (easy to get wrong)
 
@@ -115,6 +129,9 @@ Feature test, and keep the command/Service a wiring shim.
 - Multi-row mutations go in a `DB::transaction`. Discord/Nitrado side-effects are best-effort and
   must not throw into callers (notifiers swallow exceptions).
 - Slash command tasks aren't unit-tested (no gateway) — keep them thin and cover the service.
+- **Tests must not depend on the operator `.env`.** Config-default assertions are pinned via
+  `phpunit.xml` `<env>` (e.g. the `BOUNTY_*` block) so live tuning of `.env` can't turn the suite
+  red. If you add a tunable whose default you assert in a test, pin it there too.
 - Reference branches/tags: `plan1-verified`, `plan2-complete`, `plan3-complete`, `plan4-complete`.
 
 ## References (do NOT copy — rebuilt in Laracord)
