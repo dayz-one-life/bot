@@ -101,8 +101,8 @@ return [
 
     'ban' => [
 
-        // NOTE: this 'death' pool is NO LONGER used for channel posts — the death feed
-        // (death.* pools, via DiscordDeathFeedNotifier) owns the public death+ban
+        // NOTE: this 'ban.death' pool is NO LONGER used for channel posts — the lifecycle
+        // eulogy feed (LifecycleAnnouncer, via eulogy.* pools) owns the public death
         // announcement (DiscordBanNotifier::postsToChannel suppresses 'ban.death'). The
         // banned player still gets the separate 'ban.dm.death' DM below. Retained as a
         // reference/fallback; do not re-wire the ban notifier to use it.
@@ -258,74 +258,6 @@ return [
             '🏆 The latest tally. Survive longer, shoot straighter, climb higher.',
         ],
 
-    ],
-
-    'death' => [
-
-        'pvp' => [
-            '💀 :killer dropped :victim with a :weapon at :distancem. One life, well spent — back :expires.',
-            '💀 :killer reached out and touched :victim — :weapon, :distancem. See you :expires.',
-            '💀 :victim caught a :weapon from :killer at :distancem. That\'s the whole life gone, back :expires.',
-            '💀 :killer sent :victim to the lobby with a :weapon from :distancem out. Respawn unlocks :expires.',
-            '💀 :distancem was close enough for :killer\'s :weapon. RIP :victim — back :expires.',
-            '💀 :killer folded :victim at :distancem with a :weapon. Back in action :expires.',
-            '💀 :victim ate a :weapon round from :killer (:distancem). One and done — back :expires.',
-            '💀 Clean work by :killer: :victim down at :distancem with a :weapon. Out for now — back :expires.',
-            '💀 :killer\'s :weapon found :victim across :distancem. That\'s all she wrote — back :expires.',
-            '💀 :victim got beamed by :killer at :distancem (:weapon). Back :expires.',
-        ],
-
-        'pvp_noweapon' => [
-            '💀 :killer put :victim in the dirt. That\'s the one life — back :expires.',
-            '💀 :victim got sent to respawn by :killer. Back in action :expires.',
-            '💀 :killer ended :victim\'s run. See you :expires.',
-            '💀 :victim caught hands from :killer and lost. Benched — back :expires.',
-            '💀 :killer dropped :victim. One life, gone — back :expires.',
-            '💀 :victim\'s story ends here, courtesy of :killer. Respawn unlocks :expires.',
-            '💀 :killer collected :victim. That\'s a wrap — back :expires.',
-            '💀 :victim got got by :killer. Out for now — back :expires.',
-            '💀 :killer sent :victim packing. Returns :expires.',
-            '💀 RIP :victim — :killer said no. Back :expires.',
-        ],
-
-        'suicide' => [
-            '💀 :victim rage-quit life itself. One life, self-served — back :expires.',
-            '💀 :victim took the express route to respawn. Back in action :expires.',
-            '💀 :victim decided the lobby looked nicer. Benched — back :expires.',
-            '💀 :victim pressed the big red button on their own run. Back :expires.',
-            '💀 :victim called it on their own terms. See you :expires.',
-            '💀 :victim speedran the death screen, solo. Respawn unlocks :expires.',
-            '💀 :victim opted out the hard way. Returns :expires.',
-            '💀 No killer needed — :victim handled it. Out for now — back :expires.',
-            '💀 :victim showed themselves the door. Back :expires.',
-            '💀 :victim ended their own run. One life, used — back :expires.',
-        ],
-
-        'environment' => [
-            '💀 The map itself claimed :victim. One life, gone — back :expires.',
-            '💀 :victim lost a fight with the great outdoors. Back in action :expires.',
-            '💀 Mother Nature 1, :victim 0. Benched — back :expires.',
-            '💀 :victim got got by the world, no players required. Back :expires.',
-            '💀 The environment filed :victim under "deceased." Respawn unlocks :expires.',
-            '💀 :victim found out the hard way that the map fights back. See you :expires.',
-            '💀 :victim was undone by Chernarus itself. Returns :expires.',
-            '💀 Something out there ended :victim. Out for now — back :expires.',
-            '💀 :victim met an unfriendly piece of scenery. Back :expires.',
-            '💀 No killcam for :victim — the world did it. Back on the menu :expires.',
-        ],
-
-        'misc' => [
-            '💀 :victim :cause and lost their one life. Back :expires.',
-            '💀 :victim :cause — that\'s the run. Back in action :expires.',
-            '💀 :victim :cause. One life, spent — back :expires.',
-            '💀 Cause of death for :victim: :cause. Respawn unlocks :expires.',
-            '💀 :victim :cause and that was that. See you :expires.',
-            '💀 :victim :cause. Returns :expires.',
-            '💀 Turns out :victim :cause. Back :expires.',
-            '💀 :victim :cause — no take-backs. Out for now — back :expires.',
-            '💀 :victim :cause. The one life giveth, the one life taketh. Back :expires.',
-            '💀 :victim :cause. Back on the menu :expires.',
-        ],
     ],
 
     'birth' => [

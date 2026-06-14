@@ -73,8 +73,8 @@ class DiscordBanNotifier implements BanNotifier
     }
 
     /**
-     * Whether the ban notifier posts this key to the bans channel. The death feed
-     * (DiscordDeathFeedNotifier) owns the public death announcement, so ban.death is
+     * Whether the ban notifier posts this key to the bans channel. The lifecycle eulogy
+     * feed (LifecycleAnnouncer) owns the public death announcement, so ban.death is
      * channel-suppressed here; the ban.dm.death DM is still sent. Public + static so it
      * is unit-testable without a Discord gateway.
      */
