@@ -57,6 +57,9 @@ it('announces a birth for an open life past the grace window and marks it', func
 
     expect($this->notifier->births)->toHaveCount(1);
     expect($life->fresh()->birth_announced_at)->not->toBeNull();
+    // A newborn carries no stat fields (its "age" is always just the grace window).
+    expect($this->notifier->births[0]['fields'])->toBe([]);
+    expect($this->notifier->births[0]['title'])->not->toContain('<@');
 });
 
 it('does NOT announce a birth before the grace window', function () {
@@ -108,8 +111,13 @@ it('pings linked players on the content line, not unlinked', function () {
 
     makeAnnouncer($this->state, $this->notifier)->run();
 
-    expect($this->notifier->eulogies[0]['ping'])->toContain('<@555>');
-    expect($this->notifier->eulogies[0]['description'])->not->toContain('{{PLAYER}}'); // substituted
+    $e = $this->notifier->eulogies[0];
+    expect($e['ping'])->toContain('<@555>');                 // real mention only on the content line
+    expect($e['description'])->not->toContain('{{PLAYER}}');  // placeholder substituted
+    // The embed itself uses PLAIN gamertags — a <@id> would render as raw text in the title.
+    expect($e['title'])->not->toContain('<@');
+    expect($e['description'])->not->toContain('<@');
+    expect($e['title'].$e['description'])->toContain('LinkedDead');
 });
 
 it('also pings a linked killer on the eulogy content line', function () {

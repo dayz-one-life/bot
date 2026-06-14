@@ -27,7 +27,9 @@ fitting emojis (🕯️💀🐻⚰️🎉👶📰).
 Rules:
 - Refer to the SUBJECT only as the literal token {{PLAYER}} and the KILLER (if any) only as {{KILLER}}.
   Never invent or alter these tokens; never write a real name in their place.
-- Use the facts you are given; do not fabricate weapons, distances, or killers that weren't provided.
+- Use ONLY the facts you are given. NEVER fabricate details that weren't provided — no invented
+  weapons, distances, killers, ages, kill counts, OR previous lives/deaths. If a detail is absent
+  (e.g. this is the player's first life, or no killer is given), do not mention or imply it exists.
 - Output EXACTLY this shape: the FIRST line is a punchy ALL-CAPS tabloid HEADLINE (no markdown, no
   leading emoji required), then a blank line, then the article body. Do not label the sections.
 TXT;
@@ -54,8 +56,39 @@ TXT;
 
     private function userPrompt(string $kind, array $facts): string
     {
+        return $kind === 'birth' ? $this->birthPrompt($facts) : $this->eulogyPrompt($facts);
+    }
+
+    /**
+     * A newborn life is always ~the grace window old, so we deliberately do NOT send its age (the
+     * model would mistake it for a notable "5-minute life"). A first life sends no prior life at
+     * all; a respawn sends only the real prior-life summary.
+     *
+     * @param array<string,mixed> $facts
+     */
+    private function birthPrompt(array $facts): string
+    {
+        $isFirst = ! empty($facts['is_first_life']);
+
         $payload = [
-            'kind' => $kind,
+            'kind' => 'birth',
+            'subject_placeholder' => '{{PLAYER}}',
+            'is_first_life_ever' => $isFirst,
+            'previous_life' => $isFirst ? null : $facts['prior_death'],
+        ];
+
+        $intro = $isFirst
+            ? "Write a BIRTH ANNOUNCEMENT for a survivor spawning into the one-life server for the VERY FIRST TIME. They have NO previous life — do NOT invent a prior death, a past life, or how long they survived before. Celebrate and gently roast a brand-new arrival. Do NOT state how long the new life has been alive (they just spawned)."
+            : "Write a BIRTH ANNOUNCEMENT for a survivor who just RESPAWNED after dying. You may reference 'previous_life' but invent nothing beyond it. Do NOT state how long the new life has been alive (they just spawned).";
+
+        return $intro."\n\nDETAILS (JSON):\n".$this->json($payload);
+    }
+
+    /** @param array<string,mixed> $facts */
+    private function eulogyPrompt(array $facts): string
+    {
+        $payload = [
+            'kind' => 'eulogy',
             'subject_placeholder' => '{{PLAYER}}',
             'killer_placeholder' => $facts['killer'] ? '{{KILLER}}' : null,
             'facts' => [
@@ -63,7 +96,7 @@ TXT;
                 'killer' => $facts['killer'],
                 'weapon' => $facts['weapon'],
                 'distance_meters' => $facts['distance_m'],
-                'age_wall_clock' => $facts['wall_age_human'],
+                // The ONLY age is playtime (life clock). Never reference wall-clock time.
                 'age_playtime' => $facts['playtime_human'],
                 'associates_left_behind' => $facts['associates'],
                 'prior_life' => $facts['prior_death'],
@@ -71,11 +104,15 @@ TXT;
             'raw_admin_log_excerpt' => $facts['raw_log'],
         ];
 
-        $intro = $kind === 'birth'
-            ? "Write a BIRTH ANNOUNCEMENT celebrating (and roasting) a survivor who just respawned onto the coast."
-            : "Write an OBITUARY for a survivor who just died, using how they died, how old they were, who killed them and with what, and any associates left behind.";
+        $intro = "Write an OBITUARY for a survivor who just died, using how they died, how old they were (their age is 'age_playtime' — actual time played; never invent a different age), who killed them and with what, and any associates left behind.";
 
-        return $intro."\n\nDETAILS (JSON):\n".json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return $intro."\n\nDETAILS (JSON):\n".$this->json($payload);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function json(array $payload): string
+    {
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** @return array{headline:string,body:string} */
