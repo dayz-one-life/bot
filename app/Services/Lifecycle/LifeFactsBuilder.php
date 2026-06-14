@@ -4,10 +4,12 @@ namespace App\Services\Lifecycle;
 
 use App\Models\Life;
 use App\Models\Player;
+use App\Services\Adm\DayzNameHumanizer;
 use App\Services\Bounty\AssociateDetector;
 use App\Services\Connection\SessionDuration;
 use App\Services\Life\LivePlaytime;
 use Carbon\CarbonImmutable;
+use Closure;
 
 /**
  * PURE-ish (reads the DB, no side effects): turns a Life into the structured-facts array fed to
@@ -16,7 +18,11 @@ use Carbon\CarbonImmutable;
  */
 class LifeFactsBuilder
 {
-    public function __construct(private ?AssociateDetector $associates = null) {}
+    /** @param Closure(string[]):string[]|null $shuffle order-randomizer for witnesses (injectable for tests) */
+    public function __construct(
+        private ?AssociateDetector $associates = null,
+        private ?Closure $shuffle = null,
+    ) {}
 
     /** @return array<string,mixed> */
     public function build(Life $life): array
@@ -30,7 +36,9 @@ class LifeFactsBuilder
             'gamertag' => $player?->gamertag ?? '?',
             'linked' => (bool) ($player?->discord_user_id),
             'cause' => $life->death_cause,
-            'killer' => $life->death_by_gamertag,
+            // Defense-in-depth: a real PvP gamertag passes through unchanged; an infected/animal
+            // class name (should one ever land here) gets humanized like the raw log below.
+            'killer' => DayzNameHumanizer::token($life->death_by_gamertag),
             'weapon' => $life->death_weapon,
             'distance_m' => $life->death_distance,
             // "Age" is the LIFE clock — actual playtime (Σ sessions), NOT wall-clock. A life can span
@@ -42,7 +50,7 @@ class LifeFactsBuilder
             // No prior ended life => this is the player's very first life (a life only ends on death,
             // so "no prior death" == "first life"). Used so the birth notice doesn't invent a past life.
             'is_first_life' => $prior === null,
-            'raw_log' => $this->stripLocations($life->death_log),
+            'raw_log' => $this->rawLog($life->death_log),
             // Real, recently-active survivors the LLM may quote as witnesses (never invent anonymous
             // ones). Excludes the subject and the killer. Plain names — not pinged.
             'witnesses' => $this->witnesses($life),
@@ -50,8 +58,11 @@ class LifeFactsBuilder
     }
 
     /**
-     * Recently-active gamertags (seen within 14 days), most-recent first, excluding the subject and
-     * the killer. Capped small so the LLM has a handful of real names to attribute quotes to.
+     * Recently-active gamertags (seen within 14 days), excluding the subject and the killer, as a
+     * handful of real names the LLM may attribute quotes to. We pull a larger recent pool and then
+     * SHUFFLE before taking a few: ordering by recency alone is stable across posts minutes apart, and
+     * the model is biased to quote whoever is listed first — so a fixed order means the same survivor
+     * gets quoted every time. Shuffling varies who heads the list, breaking that rut.
      *
      * @return string[]
      */
@@ -61,15 +72,30 @@ class LifeFactsBuilder
         $killer = $life->death_by_gamertag;
         $cutoff = CarbonImmutable::now()->subDays(14);
 
-        return Player::query()
+        $pool = Player::query()
             ->whereNotNull('last_seen_at')
             ->where('last_seen_at', '>=', $cutoff)
             ->when($subject, fn ($q) => $q->where('gamertag', '!=', $subject))
             ->when($killer, fn ($q) => $q->where('gamertag', '!=', $killer))
             ->orderByDesc('last_seen_at')
-            ->limit(6)
+            ->limit(25)
             ->pluck('gamertag')
             ->all();
+
+        $shuffled = ($this->shuffle ?? self::defaultShuffle(...))($pool);
+
+        return array_slice($shuffled, 0, 6);
+    }
+
+    /**
+     * @param  string[]  $names
+     * @return string[]
+     */
+    private static function defaultShuffle(array $names): array
+    {
+        shuffle($names);
+
+        return $names;
     }
 
     /**
@@ -77,6 +103,14 @@ class LifeFactsBuilder
      * reveal a player's map location (where they died, their body, their base). Distances like
      * "from 153.4 meters" are NOT locations and are kept.
      */
+    /** Coordinate-stripped, class-name-humanized raw log excerpt fed to the LLM (null stays null). */
+    private function rawLog(?string $log): ?string
+    {
+        $clean = $this->stripLocations($log);
+
+        return $clean === null ? null : DayzNameHumanizer::text($clean);
+    }
+
     private function stripLocations(?string $log): ?string
     {
         if ($log === null || $log === '') {
