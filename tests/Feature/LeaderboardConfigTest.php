@@ -10,7 +10,7 @@ afterEach(function () {
 it('exposes leaderboard defaults', function () {
     expect(config('leaderboard.enabled'))->toBeTrue();
     expect(config('leaderboard.refresh_minutes'))->toBe(15);
-    expect(config('leaderboard.top_count'))->toBe(5);
+    expect(config('leaderboard.top_count'))->toBe(25);
 });
 
 it('does not fall back to the bans channel when LEADERBOARD_CHANNEL_ID is unset', function () {
