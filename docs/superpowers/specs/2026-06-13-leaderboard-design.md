@@ -26,8 +26,10 @@ connections channel.
 - **Dedupe:** the all-time-life and kill-streak boards show **one entry per player** (best
   life / best streak) so a single dominant player cannot occupy all five slots. The most-kills
   board is already per-player; the longest-distance board is intentionally per-shot (not deduped).
-- **Channel:** dedicated `LEADERBOARD_CHANNEL_ID`, falling back to `BANS_CHANNEL_ID` (mirrors
-  the bounty channel convention).
+- **Channel:** dedicated `LEADERBOARD_CHANNEL_ID`. **No fallback** — unset/empty means the
+  feature is off (the notifier no-ops on a null channel). (An earlier draft fell back to
+  `BANS_CHANNEL_ID`; that was removed so the leaderboard never posts to the bans channel by
+  surprise.)
 
 ## The five boards
 
@@ -145,7 +147,7 @@ New `config/leaderboard.php`, all env-overridable, defaults pinned in `phpunit.x
 ```php
 return [
     'enabled' => (bool) env('LEADERBOARD_ENABLED', true),
-    'channel_id' => env('LEADERBOARD_CHANNEL_ID') ?: env('BANS_CHANNEL_ID'),
+    'channel_id' => env('LEADERBOARD_CHANNEL_ID') ?: null, // no bans-channel fallback
     'refresh_minutes' => (int) env('LEADERBOARD_REFRESH_MINUTES', 15),
     'top_count' => (int) env('LEADERBOARD_TOP_COUNT', 5),
 ];
