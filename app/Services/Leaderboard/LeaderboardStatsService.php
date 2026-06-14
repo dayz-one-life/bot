@@ -210,33 +210,74 @@ class LeaderboardStatsService
     }
 
     /**
-     * Each player's fastest life-start -> first-bunker-visit time, ascending.
-     * One row per player (their best life). Lives without a visit, and visits with a
-     * null life_id, are excluded. Tie-break: earliest life start.
+     * Each player's fastest new-life-to-bunker time, ascending. One row per player
+     * (their best life). The time is PLAYTIME accrued from life start to the first
+     * bunker visit — i.e. summed connected session time, with offline gaps excluded —
+     * consistent with how life duration is measured everywhere else (LivePlaytime).
+     * (Wall-clock `visited_at - started_at` would count hours a player was logged off
+     * and can exceed the life's own playtime.) Visits with a null life_id, and lives
+     * with no recorded session time before the visit (playtime 0, e.g. a backfilled
+     * visit whose sessions weren't reconstructed), are excluded. Tie-break: earliest
+     * life start.
      *
      * @return array<int, array{gamertag:string, seconds:int}>
      */
     public function quickestNewLifeToBunker(int $limit): array
     {
-        $rows = DB::table('bunker_visits')
-            ->join('lives', 'lives.id', '=', 'bunker_visits.life_id')
+        // First bunker visit per life (null-life visits excluded).
+        $firstVisits = DB::table('bunker_visits')
+            ->whereNotNull('life_id')
+            ->groupBy('life_id')
+            ->get(['life_id', DB::raw('MIN(visited_at) as first_visit')]);
+
+        if ($firstVisits->isEmpty()) {
+            return [];
+        }
+
+        $visitTsByLife = [];
+        foreach ($firstVisits as $r) {
+            $visitTsByLife[$r->life_id] = CarbonImmutable::parse($r->first_visit)->getTimestamp();
+        }
+        $lifeIds = array_keys($visitTsByLife);
+
+        $lives = DB::table('lives')
             ->join('players', 'players.id', '=', 'lives.player_id')
-            ->groupBy('bunker_visits.life_id', 'players.gamertag', 'lives.started_at')
-            ->get([
-                'players.gamertag as gamertag',
-                'lives.started_at as started_at',
-                DB::raw('MIN(bunker_visits.visited_at) as first_visit'),
-            ]);
+            ->whereIn('lives.id', $lifeIds)
+            ->get(['lives.id as id', 'players.gamertag as gamertag', 'lives.started_at as started_at']);
+
+        $sessionsByLife = DB::table('game_sessions')
+            ->whereIn('life_id', $lifeIds)
+            ->get(['life_id', 'connected_at', 'disconnected_at'])
+            ->groupBy('life_id');
 
         $best = []; // gamertag => ['gamertag','seconds','started_at']
-        foreach ($rows as $r) {
-            $startTs = CarbonImmutable::parse($r->started_at)->getTimestamp();
-            $seconds = CarbonImmutable::parse($r->first_visit)->getTimestamp() - $startTs;
-            if ($seconds < 0) {
-                continue; // defensive: a visit can't precede its own life
+        foreach ($lives as $life) {
+            $visitTs = $visitTsByLife[$life->id];
+
+            // Sum each session's connected time clamped to the visit moment; sessions
+            // that begin at/after the visit (incl. the bunker spawn-in session) add 0.
+            $seconds = 0;
+            foreach (($sessionsByLife[$life->id] ?? []) as $s) {
+                $start = CarbonImmutable::parse($s->connected_at)->getTimestamp();
+                if ($start >= $visitTs) {
+                    continue;
+                }
+                $end = $s->disconnected_at !== null
+                    ? CarbonImmutable::parse($s->disconnected_at)->getTimestamp()
+                    : $visitTs;
+                $end = min($end, $visitTs);
+                if ($end > $start) {
+                    $seconds += $end - $start;
+                }
             }
-            if (! isset($best[$r->gamertag]) || $seconds < $best[$r->gamertag]['seconds']) {
-                $best[$r->gamertag] = ['gamertag' => $r->gamertag, 'seconds' => $seconds, 'started_at' => $startTs];
+
+            if ($seconds <= 0) {
+                continue; // no measurable playtime before the visit
+            }
+
+            $startTs = CarbonImmutable::parse($life->started_at)->getTimestamp();
+            if (! isset($best[$life->gamertag]) || $seconds < $best[$life->gamertag]['seconds']) {
+                $best[$life->gamertag] = ['gamertag' => $life->gamertag, 'seconds' => $seconds, 'started_at' => $startTs];
             }
         }
 
