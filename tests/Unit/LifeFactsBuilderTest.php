@@ -70,6 +70,38 @@ it('offers recently-active players as witnesses, excluding the subject and kille
     expect($facts['witnesses'])->not->toContain('StaleSam'); // inactive (>14 days)
 });
 
+it('humanizes infected class names in the raw log fed to the LLM', function () {
+    $p = Player::create(['gamertag' => 'Bitten', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create([
+        'player_id' => $p->id, 'started_at' => '2026-06-14T11:00:00Z', 'ended_at' => '2026-06-14T11:30:00Z',
+        'death_cause' => 'environment', 'playtime_seconds' => 1800,
+        'death_log' => '11:30 | Player "Bitten" (DEAD) (id=B=) killed by ZmbM_JoggerSkinny_Red',
+    ]);
+
+    $facts = (new LifeFactsBuilder())->build($life);
+
+    expect($facts['raw_log'])->not->toContain('ZmbM_');
+    expect($facts['raw_log'])->toContain('an infected jogger');
+});
+
+it('shuffles witnesses so the same survivor is not always quoted first', function () {
+    // Three recently-active survivors; recency order would be Alpha, Bravo, Charlie.
+    Player::create(['gamertag' => 'Alpha', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T11:59:00Z']);
+    Player::create(['gamertag' => 'Bravo', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T11:58:00Z']);
+    Player::create(['gamertag' => 'Charlie', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T11:57:00Z']);
+    $subject = Player::create(['gamertag' => 'Subject', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T12:00:00Z']);
+
+    $life = Life::create([
+        'player_id' => $subject->id, 'started_at' => '2026-06-14T11:30:00Z', 'ended_at' => '2026-06-14T12:00:00Z',
+        'death_cause' => 'environment', 'playtime_seconds' => 1800,
+    ]);
+
+    // Inject a deterministic reversing "shuffle" to prove the order hook is applied (not raw recency).
+    $facts = (new LifeFactsBuilder(null, fn (array $a) => array_reverse($a)))->build($life);
+
+    expect($facts['witnesses'])->toBe(['Charlie', 'Bravo', 'Alpha']);
+});
+
 it('marks a sole life as the first life (no prior death)', function () {
     $p = Player::create(['gamertag' => 'Newbie', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     $only = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
