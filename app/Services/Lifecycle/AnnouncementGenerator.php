@@ -96,7 +96,7 @@ TXT;
                 'killer' => $facts['killer'],
                 'weapon' => $facts['weapon'],
                 'distance_meters' => $facts['distance_m'],
-                'age_wall_clock' => $facts['wall_age_human'],
+                // The ONLY age is playtime (life clock). Never reference wall-clock time.
                 'age_playtime' => $facts['playtime_human'],
                 'associates_left_behind' => $facts['associates'],
                 'prior_life' => $facts['prior_death'],
@@ -104,7 +104,7 @@ TXT;
             'raw_admin_log_excerpt' => $facts['raw_log'],
         ];
 
-        $intro = "Write an OBITUARY for a survivor who just died, using how they died, how old they were, who killed them and with what, and any associates left behind.";
+        $intro = "Write an OBITUARY for a survivor who just died, using how they died, how old they were (their age is 'age_playtime' — actual time played; never invent a different age), who killed them and with what, and any associates left behind.";
 
         return $intro."\n\nDETAILS (JSON):\n".$this->json($payload);
     }

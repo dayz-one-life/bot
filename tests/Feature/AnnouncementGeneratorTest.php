@@ -10,7 +10,7 @@ beforeEach(fn () => MessagePicker::reset());
 function genFacts(array $over = []): array {
     return array_merge([
         'gamertag' => 'Doomed', 'linked' => true, 'cause' => 'pvp', 'killer' => 'Sniper',
-        'weapon' => 'SVD', 'distance_m' => 312.5, 'wall_age_human' => '47 minutes',
+        'weapon' => 'SVD', 'distance_m' => 312.5,
         'playtime_human' => '41 minutes', 'playtime_seconds' => 2460, 'associates' => ['Buddy'],
         'prior_death' => null, 'raw_log' => "00:02 hit\n00:03 killed by Sniper",
     ], $over);
@@ -26,6 +26,9 @@ it('parses the LLM output into headline + body (first line is the headline)', fu
 
     expect($out['headline'])->toBe('LOCAL MAN MEETS SVD');
     expect($out['body'])->toContain('{{PLAYER}}');
+    // Age is the life clock (playtime) only — never wall-clock.
+    Http::assertSent(fn ($r) => str_contains($r['messages'][1]['content'], 'age_playtime')
+        && ! str_contains($r['messages'][1]['content'], 'age_wall_clock'));
 });
 
 it('falls back to a canned eulogy when the client throws', function () {

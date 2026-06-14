@@ -29,8 +29,7 @@ it('builds facts for a pvp death', function () {
     expect($facts['killer'])->toBe('Sniper');
     expect($facts['weapon'])->toBe('SVD');
     expect($facts['distance_m'])->toBe(312.5);
-    expect($facts['wall_age_human'])->toContain('47');
-    expect($facts['playtime_human'])->toContain('41');
+    expect($facts['playtime_human'])->toContain('41'); // age == playtime (life clock), not wall-clock
     expect($facts['raw_log'])->toContain('raw line A');
     expect($facts['associates'])->toBeArray();
 });

@@ -168,7 +168,7 @@ class LifecycleAnnouncer
         }
 
         $fields = [
-            ['name' => '🎂 Age', 'value' => "{$facts['wall_age_human']} ({$facts['playtime_human']} played)"],
+            ['name' => '🎂 Age', 'value' => "{$facts['playtime_human']} played"],
             ['name' => '☠️ Cause', 'value' => ucfirst((string) ($facts['cause'] ?? 'unknown'))],
         ];
 
