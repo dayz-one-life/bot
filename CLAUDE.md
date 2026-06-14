@@ -11,13 +11,17 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **lives / sessions / playtime**, **bans** a player for 12h when they die, and runs an
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
-Status: Plans 1–4, the bounty / associate-detection feature, the online-players roster, **and**
-bunker-visit tracking are implemented and tested. The bounty token economy is **live** (it
-is not gated by `BAN_DRY_RUN`). The online roster is **live** (channel id configured; a single
-message refreshed in place every few minutes). Bunker visits are detected from the ADM
-`RestrictedAreaBunkerEntrance` teleport line and surfaced on two leaderboard boards (DB-only, not
-gated by `BAN_DRY_RUN`). The one remaining real-world step is arming live **banning** (the
-`BAN_DRY_RUN` cutover — see README).
+Status: Plans 1–4, the bounty / associate-detection feature, the online-players roster,
+bunker-visit tracking, **and** the births/eulogies + playtime-gated-ban feature are implemented and
+tested. The bounty token economy is **live** (it is not gated by `BAN_DRY_RUN`). The online roster
+is **live** (channel id configured; a single message refreshed in place every few minutes). Bunker
+visits are detected from the ADM `RestrictedAreaBunkerEntrance` teleport line and surfaced on two
+leaderboard boards (DB-only, not gated by `BAN_DRY_RUN`). Bans now require **≥60 min playtime**
+(`BAN_MIN_PLAYTIME_MINUTES`); a new **births/eulogies** subsystem (LLM via OpenRouter, with a canned
+fallback) replaces the old death feed — DB-only + channel posts, not gated by `BAN_DRY_RUN`, and
+falls back to canned copy until `OPENROUTER_API_KEY` and the `BIRTHS_CHANNEL_ID` / `EULOGY_CHANNEL_ID`
+channels are set. The one remaining real-world step is arming live **banning** (the `BAN_DRY_RUN`
+cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
@@ -62,11 +66,15 @@ php laracord adm:backfill-bunker-visits --since-days=14   # backfill bunker visi
 `.env` keys: `NITRADO_TOKEN`, `NITRADO_SERVICE_ID` (the one-life server is **18196786**),
 `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `BANS_CHANNEL_ID`, `ADMIN_ROLE_ID`, `BAN_DURATION_HOURS=12`,
 `BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_REFRESH_MINUTES=5`, `CONNECTIONS_ENABLED=true`,
-`DEATH_FEED_MAX_AGE_MINUTES=10`,
 `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
 `BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`), plus
 `LEADERBOARD_CHANNEL_ID`, `LEADERBOARD_REFRESH_MINUTES`, `LEADERBOARD_TOP_COUNT`,
-`LEADERBOARD_ENABLED`, plus `BUNKER_TRACKING_ENABLED=true`, `BUNKER_VISIT_COOLDOWN_MINUTES=60`.
+`LEADERBOARD_ENABLED`, plus `BUNKER_TRACKING_ENABLED=true`, `BUNKER_VISIT_COOLDOWN_MINUTES=60`,
+plus the lifecycle/LLM block: `LIFECYCLE_ENABLED=true`, `LIFE_GRACE_MINUTES=5`,
+`BAN_MIN_PLAYTIME_MINUTES=60`, `LIFECYCLE_MAX_AGE_MINUTES=30`, `BIRTHS_CHANNEL_ID`,
+`EULOGY_CHANNEL_ID`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=anthropic/claude-haiku-4.5`,
+`OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_SECONDS=20` (mirrored in `config/lifecycle.php` +
+`config/llm.php`). The retired `DEATH_FEED_MAX_AGE_MINUTES` key is no longer used.
 `.env` is git-ignored — never commit secrets.
 
 ## Architecture
@@ -124,16 +132,28 @@ Feature test, and keep the command/Service a wiring shim.
   never @-mention; DM pools use the plain gamertag. Add personality to any new public message by
   adding a pool + one `pick()` call. Ban routing (`death` / `manual` / `extended`) is the pure
   `DiscordBanNotifier::bannedKey()`.
-- **Death feed** — `app/Services/DeathFeed/`: `DeathFeedComposer` (pure: picks a personality
-  pool from the death cause, renders victim/killer via `PlayerMention`, weapon/distance/relative
-  expiry) + `DeathFeedNotifier` / `DiscordDeathFeedNotifier` / `NullDeathFeedNotifier`. Driven by
-  `DeathBanService` for each reconciled live death — posts ONE merged kill/death + ban line to
-  `BANS_CHANNEL_ID` (reused). **Public post → @-mentions linked players** (victim and killer).
-  **Not gated by `BAN_DRY_RUN`** (the Ban row with its expiry exists even in dry run), so the feed
-  is live now while real Nitrado bans/DMs still wait for cutover. Freshness-gated by
-  `DEATH_FEED_MAX_AGE_MINUTES` (default 10) to suppress post-downtime backlog. `DiscordBanNotifier`
-  no longer channel-posts `ban.death` (the feed owns it) but still sends the `ban.dm.death` DM.
-  Weapon/distance are persisted on `lives` (`death_weapon`/`death_distance`).
+- **Births, eulogies & playtime-gated bans** — `app/Services/Lifecycle/` + `app/Services/Llm/`
+  (REPLACES the old `app/Services/DeathFeed/`, now deleted). A single **grace threshold** drives
+  de-dup of spawn-reroll suicides: a life "counts" once `playtime_seconds ≥ LIFE_GRACE_MINUTES`
+  (default 5) — only then is a **birth** announced and (on death) a **eulogy** posted. **Banning**
+  uses a higher gate, `BAN_MIN_PLAYTIME_MINUTES` (default 60): `DeathBanService` now only bans deaths
+  with ≥60 min playtime and no longer posts any feed (eulogies own the death announcement). Pieces:
+  `LifeFactsBuilder` (pure: `Life` → facts incl. ages, killer/weapon/distance, associates from the
+  bounty detector, prior death), `DeathLogCapturer` (pure: snapshots the raw ADM death-window into
+  `lives.death_log` during ingest), `OpenRouterClient` (`Http`-facade wrapper; model
+  `OPENROUTER_MODEL`, default `anthropic/claude-haiku-4.5`), `AnnouncementGenerator` (newspaper-
+  columnist prompt → `{headline, body}` with `{{PLAYER}}`/`{{KILLER}}` placeholders; **falls back to
+  canned `birth.*`/`eulogy.*` personality pools** on any LLM failure — so no `OPENROUTER_API_KEY`
+  just means canned copy), `MentionSubstitutor` (placeholders → mention/backtick), the
+  `LifecycleNotifier` trio (`Discord` posts a rich newspaper **embed**; the real `<@id>` ping rides
+  a plain content line ABOVE the embed because Discord doesn't notify on mentions inside an embed),
+  and `LifecycleAnnouncer` (scans due births/eulogies, gated by `go_live_at` + freshness
+  `LIFECYCLE_MAX_AGE_MINUTES` + grace; idempotent via `lives.birth_announced_at` / `eulogy_posted`).
+  Periodic `LifecycleAnnounceService` (60s, `config/lifecycle.php`). Births → `BIRTHS_CHANNEL_ID`,
+  eulogies → `EULOGY_CHANNEL_ID`. **Births are intentionally delayed ~grace** (the cost of de-duping
+  rerolls). **Not gated by `BAN_DRY_RUN`** (channel posts/DB markers are independent of real Nitrado
+  bans). `DiscordBanNotifier` still suppresses the `ban.death` channel post and sends the
+  `ban.dm.death` DM. Weapon/distance persisted on `lives` (`death_weapon`/`death_distance`).
 - **Online-players roster** — `app/Services/Online/`: `OnlineRosterQuery` (read-only snapshot of open
   `game_sessions` → rows `{gamertag, session_seconds, life_seconds}`, longest session first),
   `OnlineRosterComposer` (pure → `{title, description}` embed payload; backticked gamertags,
