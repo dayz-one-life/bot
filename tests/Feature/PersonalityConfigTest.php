@@ -7,7 +7,9 @@ it('ships a complete set of non-empty personality pools', function () {
         'ban.death', 'ban.manual', 'ban.extended', 'ban.unbanned',
         'ban.dm.death', 'ban.dm.manual', 'ban.dm.unbanned',
         'connection.connected', 'connection.disconnected', 'connection.disconnected_nodur',
-        'leaderboard.intro',
+        'leaderboard.alive', 'leaderboard.all_time', 'leaderboard.kills',
+        'leaderboard.streak', 'leaderboard.distance', 'leaderboard.bunker_visits',
+        'leaderboard.quickest_bunker',
     ];
 
     foreach ($keys as $key) {

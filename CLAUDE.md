@@ -170,9 +170,8 @@ Feature test, and keep the command/Service a wiring shim.
   boards: longest life alive/all-time, most kills, longest kill streak, longest-distance kills,
   most bunker visits, quickest new-life→bunker — all computed from
   `lives`/`game_sessions`/`players`/`bunker_visits`, no kills table), `LeaderboardComposer`
-  (pure → Discord-agnostic embed payload; plain backticked gamertags, **never @-mentions**),
-  `DiscordLeaderboardNotifier` / `NullLeaderboardNotifier` (post-or-edit a single embed, message
-  id persisted in `bot_state` as `leaderboard_message_id`/`leaderboard_channel_id`), and the
+  (pure → an ordered list of seven Discord-agnostic board payloads `{key,title,description}`, one per message; plain backticked gamertags, **never @-mentions**; each board carries a per-board personality line, entries in the embed description to clear the 1024-char field cap),
+  `DiscordLeaderboardNotifier` / `NullLeaderboardNotifier` (post-or-edit seven embeds, ids persisted in `bot_state` as a JSON list `leaderboard_message_ids` + `leaderboard_channel_id`; atomic reflush — repost all seven in order — if any message is missing or the channel changed), and the
   `LivePlaytime` helper (`app/Services/Life/`) for open-life elapsed playtime. Periodic
   `LeaderboardService` (default 15m, `config/leaderboard.php`). Not gated by `BAN_DRY_RUN`
   (read-only). The all-time-life, kill-streak, and quickest-to-bunker boards dedupe to one entry
