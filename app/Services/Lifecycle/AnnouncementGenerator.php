@@ -21,12 +21,16 @@ genuine rebirth.
 
 Write a SUBSTANTIAL, newspaper-style piece — NOT a one-liner. Aim for 150-350 words across 2-4 short
 paragraphs. Be funny, a little roasty, and creative. Use vivid Discord markdown formatting: a
-dateline, **bold**, *italics*, the occasional `> blockquote` from a fictional witness, and plenty of
-fitting emojis (🕯️💀🐻⚰️🎉👶📰).
+dateline, **bold**, *italics*, the occasional `> blockquote` quote from a REAL survivor (see below),
+and plenty of fitting emojis (🕯️💀🐻⚰️🎉👶📰).
 
 Rules:
 - Refer to the SUBJECT only as the literal token {{PLAYER}} and the KILLER (if any) only as {{KILLER}}.
   Never invent or alter these tokens; never write a real name in their place.
+- Any witness/bystander/reaction quote MUST be attributed to one of the real survivors listed in
+  'real_survivors_for_quotes', using their exact gamertag. NEVER invent an anonymous, fictional, or
+  made-up witness ("a seasoned survivor", "one onlooker", etc.). If that list is empty, omit witness
+  quotes entirely. Do NOT quote the subject or the killer as a witness.
 - Use ONLY the facts you are given. NEVER fabricate details that weren't provided — no invented
   weapons, distances, killers, ages, kill counts, OR previous lives/deaths. If a detail is absent
   (e.g. this is the player's first life, or no killer is given), do not mention or imply it exists.
@@ -78,6 +82,7 @@ TXT;
             'subject_placeholder' => '{{PLAYER}}',
             'is_first_life_ever' => $isFirst,
             'previous_life' => $isFirst ? null : $facts['prior_death'],
+            'real_survivors_for_quotes' => $facts['witnesses'] ?? [],
         ];
 
         $intro = $isFirst
@@ -104,6 +109,7 @@ TXT;
                 'associates_left_behind' => $facts['associates'],
                 'prior_life' => $facts['prior_death'],
             ],
+            'real_survivors_for_quotes' => $facts['witnesses'] ?? [],
             'raw_admin_log_excerpt' => $facts['raw_log'],
         ];
 
