@@ -5,9 +5,9 @@ namespace App\Services\Leaderboard;
 interface LeaderboardNotifier
 {
     /**
-     * Publish (post or edit) the leaderboard.
+     * Publish (post or edit) the leaderboard's 7 board messages.
      *
-     * @param  array{title:string, description:string, fields:array<int, array{name:string, value:string}>}  $payload
+     * @param  array<int, array{key:string, title:string, description:string}>  $payloads  Ordered, top→bottom.
      */
-    public function publish(array $payload): void;
+    public function publish(array $payloads): void;
 }

@@ -40,15 +40,15 @@ class LeaderboardService extends Service
     }
 
     /**
-     * Build the payload from the seven boards and hand it to the notifier.
-     * Split out so tests can inject a NullLeaderboardNotifier.
+     * Build the 7 board payloads from the seven stat boards and hand them to the
+     * notifier. Split out so tests can inject a NullLeaderboardNotifier.
      */
     public function compose(LeaderboardNotifier $notifier): void
     {
-        $top = (int) config('leaderboard.top_count', 5);
+        $top = (int) config('leaderboard.top_count', 25);
         $stats = new LeaderboardStatsService();
 
-        $payload = (new LeaderboardComposer())->compose([
+        $payloads = (new LeaderboardComposer())->composeBoards([
             'alive' => $stats->aliveLongestLives($top),
             'all_time' => $stats->allTimeLongestLives($top),
             'kills' => $stats->mostKills($top),
@@ -58,6 +58,6 @@ class LeaderboardService extends Service
             'quickest_bunker' => $stats->quickestNewLifeToBunker($top),
         ]);
 
-        $notifier->publish($payload);
+        $notifier->publish($payloads);
     }
 }

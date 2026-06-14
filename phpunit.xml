@@ -22,7 +22,7 @@
         <env name="DEATH_FEED_MAX_AGE_MINUTES" value="10"/>
         <env name="LEADERBOARD_ENABLED" value="true"/>
         <env name="LEADERBOARD_REFRESH_MINUTES" value="15"/>
-        <env name="LEADERBOARD_TOP_COUNT" value="5"/>
+        <env name="LEADERBOARD_TOP_COUNT" value="25"/>
         <env name="BUNKER_TRACKING_ENABLED" value="true"/>
         <env name="BUNKER_VISIT_COOLDOWN_MINUTES" value="60"/>
     </php>

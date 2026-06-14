@@ -4,11 +4,11 @@ namespace App\Services\Leaderboard;
 
 class NullLeaderboardNotifier implements LeaderboardNotifier
 {
-    /** @var array{title:string, description:string, fields:array}|null */
-    public ?array $lastPayload = null;
+    /** @var array<int, array{key:string, title:string, description:string}>|null */
+    public ?array $lastPayloads = null;
 
-    public function publish(array $payload): void
+    public function publish(array $payloads): void
     {
-        $this->lastPayload = $payload;
+        $this->lastPayloads = $payloads;
     }
 }
