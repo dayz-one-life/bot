@@ -6,10 +6,10 @@ It ingests a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs and reconstruct
 player's **lives**, **play sessions**, and **playtime** from connect / disconnect / death /
 server-reboot events.
 
-> **Status — core + bounty + connection announcements live; deployed.** ADM ingestion +
+> **Status — core + bounty + online roster live; deployed.** ADM ingestion +
 > life/playtime tracking (Plan 1), the **banning layer** (Plan 2), the **linking + unban-token
 > economy** (Plan 3), and the **read views + admin commands** (Plan 4) are implemented and verified,
-> as are the **bounty / associate-detection** feature and the **connection-announcements** channel.
+> as are the **bounty / associate-detection** feature and the **online-players roster** channel.
 > The bot runs as the systemd service `one-life-bot`. The only remaining real-world step is arming
 > live banning (the `BAN_DRY_RUN` ops toggle below). See `docs/superpowers/specs/` and
 > `docs/superpowers/plans/` for the design and roadmap.
@@ -42,8 +42,9 @@ Configure `.env`:
 | `BAN_DURATION_HOURS` | Death-ban length, default `12` |
 | `BAN_DRY_RUN` | When `true`, record intended bans in the DB but make **no** Nitrado/Discord writes |
 | `ADM_BACKFILL_BUDGET` | Max older ADM files drained per ingestion tick, default `15` |
-| `CONNECTIONS_CHANNEL_ID` | Channel for player connect/disconnect announcements (unset = feature off) |
-| `CONNECTIONS_MAX_AGE_MINUTES` | Suppress connect/disconnect events older than this many minutes (stale-backlog guard), default `10` |
+| `CONNECTIONS_CHANNEL_ID` | Channel for the live online-players roster, a single refreshed-in-place message (unset = feature off) |
+| `CONNECTIONS_REFRESH_MINUTES` | How often to refresh the roster, default `5` (min 1) |
+| `CONNECTIONS_ENABLED` | Set `false` to disable the roster while keeping the channel configured, default `true` |
 | `LEADERBOARD_CHANNEL_ID` | Channel for the auto-updating leaderboard embed (unset = feature off) |
 | `LEADERBOARD_REFRESH_MINUTES` | How often to refresh the embed, default `15` |
 | `LEADERBOARD_TOP_COUNT` | Players shown per board, default `5` |
@@ -116,9 +117,10 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
   after `go_live_at` and aren't yet banned (idempotent via `lives.ban_issued`).
 - `app/Services/BanExpiryService.php` — 60s service: lifts expired bans, reconciles Nitrado.
 - `app/Services/IngestAdmService.php` — 60s service wrapping the ingestor + death-ban pass.
-- `app/Services/Connection/{ConnectionNotifier,DiscordConnectionNotifier,NullConnectionNotifier,SessionDuration}.php`
-  — posts live connect/disconnect lines to `CONNECTIONS_CHANNEL_ID` (no mentions; live + freshness
-  gated). Wired into `IngestAdmService`; `SessionDuration` formats the session length on disconnect.
+- `app/Services/Online/{OnlineRosterQuery,OnlineRosterComposer,OnlineRosterNotifier,NullOnlineRosterNotifier,DiscordOnlineRosterNotifier}.php`
+  + `app/Services/OnlinePlayersService.php` — the online-players roster: a single embed listing who's
+  currently online (open sessions), posted once and edited in place every `CONNECTIONS_REFRESH_MINUTES`
+  (no mentions). `app/Services/Connection/SessionDuration.php` formats the session/life durations.
 - `app/Services/Tokens/{LinkService,ReferrerService,RewardService,RedemptionService}.php` — the
   unban-token economy: link a gamertag (+1 token), set a referrer, monthly grants (+1 base
   +1/active referral), and spend a token to lift a temporary ban.
@@ -192,29 +194,30 @@ Token awards from bounty kills are DB-only writes and fire even when `BAN_DRY_RU
 
 Run `php laracord adm:backfill-positions` to seed historical position data (e.g. so association detection works immediately rather than accumulating over ~14 days). `--since-days=N` limits scope; `--keep` appends instead of truncating.
 
-## Connection announcements
+## Online-players roster
 
-When `CONNECTIONS_CHANNEL_ID` is set, the bot posts a one-line message to that channel each time a
-player connects or disconnects:
+When `CONNECTIONS_CHANNEL_ID` is set, the bot maintains a single **online-players roster** message in
+that channel — posted once and edited in place every `CONNECTIONS_REFRESH_MINUTES` (default `5`)
+rather than a running log of join/leave lines. Each currently-online player gets a row with their
+current session time and current-life playtime:
 
 ```text
-🟢 `Gamertag` connected
-🔴 `Gamertag` disconnected · on for 1h 23m
+🟢 Online — 2
+`Gamertag` · on 1h 23m · alive 4h 12m
+`OtherTag` · on 12m · alive 12m
 ```
 
-These posts **never @-mention** linked Discord users — it's a high-volume channel, so gamertags stay
-plain text (an intentional exception to the bot's usual mention-in-public-channels rule). The bot
-needs **View Channel + Send Messages** on the channel.
+When nobody is online the body reads `Nobody's online right now.` The roster **never @-mentions**
+linked Discord users — it's a high-volume, frequently-edited message, so gamertags stay plain text
+(an intentional exception to the bot's usual mention-in-public-channels rule). The bot needs **View
+Channel + Send Messages** on the channel.
 
-Only **live** events are announced. Two guards keep it quiet:
+"Online" is read from the database (open game sessions), so the roster is decoupled from ingestion
+and self-heals: if the stored message is deleted, the next refresh posts a fresh one. The message id
+is persisted in `bot_state` (`online_roster_message_id` / `online_roster_channel_id`).
 
-- **No backfill replay** — historical events processed while the ingestor is catching up are never
-  posted; announcing starts only once it flips to `live` mode.
-- **Freshness window** — after downtime, a restart suppresses any event older than
-  `CONNECTIONS_MAX_AGE_MINUTES` (default `10`), so the channel doesn't get a burst of hours-old
-  lines.
-
-Leave `CONNECTIONS_CHANNEL_ID` unset to disable the feature entirely (the notifier safely no-ops).
+Leave `CONNECTIONS_CHANNEL_ID` unset — or set `CONNECTIONS_ENABLED=false` — to disable the feature
+(the notifier safely no-ops).
 
 ## Leaderboard
 
