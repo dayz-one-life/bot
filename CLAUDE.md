@@ -11,11 +11,11 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **lives / sessions / playtime**, **bans** a player for 12h when they die, and runs an
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
-Status: Plans 1–4, the bounty / associate-detection feature, **and** connection announcements are
+Status: Plans 1–4, the bounty / associate-detection feature, **and** the online-players roster are
 implemented, tested, and deployed (systemd `one-life-bot`). The bounty token economy is **live** (it
-is not gated by `BAN_DRY_RUN`). Connection announcements are **live** (channel id configured;
-posts on connect/disconnect). The one remaining real-world step is arming live **banning** (the
-`BAN_DRY_RUN` cutover — see README).
+is not gated by `BAN_DRY_RUN`). The online roster is **live** (channel id configured; a single
+message refreshed in place every few minutes). The one remaining real-world step is arming live
+**banning** (the `BAN_DRY_RUN` cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
@@ -58,7 +58,7 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 
 `.env` keys: `NITRADO_TOKEN`, `NITRADO_SERVICE_ID` (the one-life server is **18196786**),
 `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `BANS_CHANNEL_ID`, `ADMIN_ROLE_ID`, `BAN_DURATION_HOURS=12`,
-`BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_MAX_AGE_MINUTES=10`,
+`BAN_DRY_RUN`, `CONNECTIONS_CHANNEL_ID`, `CONNECTIONS_REFRESH_MINUTES=5`, `CONNECTIONS_ENABLED=true`,
 `DEATH_FEED_MAX_AGE_MINUTES=10`,
 `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
 `BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`), plus
@@ -130,13 +130,18 @@ Feature test, and keep the command/Service a wiring shim.
   `DEATH_FEED_MAX_AGE_MINUTES` (default 10) to suppress post-downtime backlog. `DiscordBanNotifier`
   no longer channel-posts `ban.death` (the feed owns it) but still sends the `ban.dm.death` DM.
   Weapon/distance are persisted on `lives` (`death_weapon`/`death_distance`).
-- **Connection announcements** — `app/Services/Connection/`: `ConnectionNotifier` (interface) +
-  `DiscordConnectionNotifier` / `NullConnectionNotifier`, plus the pure `SessionDuration` humanizer.
-  `IngestAdmService` posts a one-line `🟢 connected` / `🔴 disconnected · on for 1h 23m` to
-  `CONNECTIONS_CHANNEL_ID` for **live, fresh** events only — gated by the ingestor's `$isLive` flag
-  plus a `CONNECTIONS_MAX_AGE_MINUTES` (default 10) freshness window that suppresses stale
-  post-restart backlog. **Deliberately never @-mentions** (high-volume channel) — an intentional
-  exception to the "public posts mention" rule above.
+- **Online-players roster** — `app/Services/Online/`: `OnlineRosterQuery` (read-only snapshot of open
+  `game_sessions` → rows `{gamertag, session_seconds, life_seconds}`, longest session first),
+  `OnlineRosterComposer` (pure → `{title, description}` embed payload; backticked gamertags,
+  `🟢 Online — N` / `Nobody's online right now.`), `OnlineRosterNotifier` interface +
+  `DiscordOnlineRosterNotifier` (post-or-edit one message; id persisted in `bot_state` as
+  `online_roster_message_id`/`online_roster_channel_id`) / `NullOnlineRosterNotifier`. Periodic
+  `OnlinePlayersService` (default 5m, `config/online.php`) wires query → composer → notifier.
+  Mirrors the leaderboard subsystem; not gated by `BAN_DRY_RUN` (read-only). **Deliberately never
+  @-mentions** (high-volume, frequently-edited message) — an intentional exception to the "public
+  posts mention" rule above. `SessionDuration` (still in `app/Services/Connection/`) humanizes the
+  durations. Ingestion still *records* connect/disconnect into `game_sessions` via `LifeTracker`;
+  the roster just reads them — there is no longer a per-event connect/disconnect channel post.
 - **Leaderboard** — `app/Services/Leaderboard/`: `LeaderboardStatsService` (five read-only
   boards: longest life alive/all-time, most kills, longest kill streak, longest-distance kills —
   all computed from `lives`/`game_sessions`/`players`, no kills table), `LeaderboardComposer`
