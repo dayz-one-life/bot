@@ -15,7 +15,7 @@ it('composes all five boards into the notifier payload', function () {
     $notifier = new NullLeaderboardNotifier();
     (new LeaderboardService())->compose($notifier);
 
-    expect($notifier->lastPayload['fields'])->toHaveCount(5);
+    expect($notifier->lastPayload['fields'])->toHaveCount(7);
     expect($notifier->lastPayload['title'])->toContain('Leaderboard');
     // Alice's open life shows on the alive board (field 0)
     expect($notifier->lastPayload['fields'][0]['value'])->toContain('Alice');

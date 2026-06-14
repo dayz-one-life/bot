@@ -22,7 +22,7 @@ class LeaderboardComposer
     }
 
     /**
-     * @param  array{alive:array, all_time:array, kills:array, streak:array, distance:array}  $boards
+     * @param  array{alive:array, all_time:array, kills:array, streak:array, distance:array, bunker_visits:array, quickest_bunker:array}  $boards
      * @return array{title:string, description:string, fields:array<int, array{name:string, value:string}>}
      */
     public function compose(array $boards): array
@@ -36,6 +36,8 @@ class LeaderboardComposer
                 ['name' => '🔫 Most Kills', 'value' => $this->countRows($boards['kills'], 'kills')],
                 ['name' => '🩸 Longest Kill Streak', 'value' => $this->countRows($boards['streak'], 'streak')],
                 ['name' => '🎯 Longest Kills', 'value' => $this->distanceRows($boards['distance'])],
+                ['name' => '🚪 Most Bunker Visits', 'value' => $this->countRows($boards['bunker_visits'], 'bunker_visits', 'visit', 'visits')],
+                ['name' => '⏱️ Quickest New Life → Bunker', 'value' => $this->durationRows($boards['quickest_bunker'])],
             ],
         ];
     }
@@ -56,7 +58,7 @@ class LeaderboardComposer
     }
 
     /** @param array<int, array{gamertag:string}> $rows */
-    private function countRows(array $rows, string $key): string
+    private function countRows(array $rows, string $key, string $singular = 'kill', string $plural = 'kills'): string
     {
         if ($rows === []) {
             return '*No entries yet*';
@@ -65,7 +67,7 @@ class LeaderboardComposer
         $lines = [];
         foreach ($rows as $i => $r) {
             $n = (int) $r[$key];
-            $noun = $n === 1 ? 'kill' : 'kills';
+            $noun = $n === 1 ? $singular : $plural;
             $lines[] = ($i + 1).". `{$r['gamertag']}` — {$n} {$noun}";
         }
 
