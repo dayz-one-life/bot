@@ -49,6 +49,8 @@ Configure `.env`:
 | `LEADERBOARD_REFRESH_MINUTES` | How often to refresh the embed, default `15` |
 | `LEADERBOARD_TOP_COUNT` | Players shown per board, default `5` |
 | `LEADERBOARD_ENABLED` | Master toggle, default `true` |
+| `BUNKER_TRACKING_ENABLED` | Master toggle for bunker-visit tracking, default `true` |
+| `BUNKER_VISIT_COOLDOWN_MINUTES` | De-dup window for repeat bunker entries, default `60` |
 
 ## Verify ingestion against real data (the Plan 1 milestone)
 
@@ -222,7 +224,7 @@ Leave `CONNECTIONS_CHANNEL_ID` unset — or set `CONNECTIONS_ENABLED=false` — 
 ## Leaderboard
 
 When `LEADERBOARD_CHANNEL_ID` is set, the bot posts (or edits in place) a single Discord embed
-every `LEADERBOARD_REFRESH_MINUTES` minutes (default 15) with five boards:
+every `LEADERBOARD_REFRESH_MINUTES` minutes (default 15) with seven boards:
 
 | Board | What it shows |
 | --- | --- |
@@ -231,6 +233,8 @@ every `LEADERBOARD_REFRESH_MINUTES` minutes (default 15) with five boards:
 | Most kills | Top players by total kill count across all lives |
 | Longest kill streak | Top players by their best consecutive-kill streak (one entry per player) |
 | Longest-distance kills | Top confirmed kills sorted by distance (metres) |
+| Most bunker visits | Top players by total bunker visits |
+| Quickest new life → bunker | Top players by their fastest life-start → bunker time (one entry per player) |
 
 The embed message id is persisted in `bot_state` so the bot edits the same message on each
 refresh rather than spamming the channel. Gamertags are shown as plain backticked text —
@@ -238,6 +242,30 @@ refresh rather than spamming the channel. Gamertags are shown as plain backticke
 
 Set `LEADERBOARD_ENABLED=false` or leave `LEADERBOARD_CHANNEL_ID` unset to disable.
 Not gated by `BAN_DRY_RUN` (purely read-only).
+
+## Bunker visits
+
+The server's bunker works by teleport: a player logs out inside a restricted area and, on
+reconnect, is teleported into the bunker. DayZ records this with an explicit ADM line —
+`... was teleported ... Reason: Spawning in Player Restricted Area: RestrictedAreaBunkerEntrance` —
+so the bot detects a visit from that self-labeling reason string, **not** a coordinate/proximity
+check. Each detected entrance is recorded as one row in `bunker_visits`.
+
+Rapid relogs inside the bunker would each emit an entrance line, so visits are de-duped per player
+within `BUNKER_VISIT_COOLDOWN_MINUTES` (default 60). Each visit is associated with the life it
+occurred in (a logout doesn't end a life), which powers the two leaderboard boards above —
+**Most bunker visits** and **Quickest new life → bunker** (life start → first bunker visit, best
+per player).
+
+Visits are recorded going forward during normal ingest. To capture history, run:
+
+```bash
+php laracord adm:backfill-bunker-visits             # all ADM history
+php laracord adm:backfill-bunker-visits --since-days=14   # limit scope
+```
+
+The backfill is idempotent (the cooldown swallows re-derived duplicates) and never bans or changes
+lives. DB-only; not gated by `BAN_DRY_RUN`. Set `BUNKER_TRACKING_ENABLED=false` to disable detection.
 
 ## Tests
 

@@ -11,11 +11,13 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **lives / sessions / playtime**, **bans** a player for 12h when they die, and runs an
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
-Status: Plans 1–4, the bounty / associate-detection feature, **and** the online-players roster are
-implemented, tested, and deployed (systemd `one-life-bot`). The bounty token economy is **live** (it
+Status: Plans 1–4, the bounty / associate-detection feature, the online-players roster, **and**
+bunker-visit tracking are implemented and tested. The bounty token economy is **live** (it
 is not gated by `BAN_DRY_RUN`). The online roster is **live** (channel id configured; a single
-message refreshed in place every few minutes). The one remaining real-world step is arming live
-**banning** (the `BAN_DRY_RUN` cutover — see README).
+message refreshed in place every few minutes). Bunker visits are detected from the ADM
+`RestrictedAreaBunkerEntrance` teleport line and surfaced on two leaderboard boards (DB-only, not
+gated by `BAN_DRY_RUN`). The one remaining real-world step is arming live **banning** (the
+`BAN_DRY_RUN` cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
@@ -52,6 +54,7 @@ php laracord migrate                 # apply migrations (SQLite at database/data
 php laracord                          # run the bot (needs DISCORD_TOKEN; starts the Services)
 php laracord adm:verify --ticks=500 --budget=50   # backfill + life/playtime/death report (no bans)
 php laracord adm:backfill-positions --since-days=14   # backfill position samples (no bans; --keep to append)
+php laracord adm:backfill-bunker-visits --since-days=14   # backfill bunker visits from ADM history (idempotent; no bans)
 ./vendor/bin/pest                     # run the test suite
 ./vendor/bin/pest tests/Feature/Foo.php   # one file
 ```
@@ -63,7 +66,8 @@ php laracord adm:backfill-positions --since-days=14   # backfill position sample
 `ADM_BACKFILL_BUDGET=15`, plus the `BOUNTY_*` block (`BOUNTY_CHANNEL_ID`,
 `BOUNTY_POSITION_RETENTION_DAYS`, and the tunables mirrored in `config/bounty.php`), plus
 `LEADERBOARD_CHANNEL_ID`, `LEADERBOARD_REFRESH_MINUTES`, `LEADERBOARD_TOP_COUNT`,
-`LEADERBOARD_ENABLED`. `.env` is git-ignored — never commit secrets.
+`LEADERBOARD_ENABLED`, plus `BUNKER_TRACKING_ENABLED=true`, `BUNKER_VISIT_COOLDOWN_MINUTES=60`.
+`.env` is git-ignored — never commit secrets.
 
 ## Architecture
 
@@ -142,15 +146,30 @@ Feature test, and keep the command/Service a wiring shim.
   posts mention" rule above. `SessionDuration` (still in `app/Services/Connection/`) humanizes the
   durations. Ingestion still *records* connect/disconnect into `game_sessions` via `LifeTracker`;
   the roster just reads them — there is no longer a per-event connect/disconnect channel post.
-- **Leaderboard** — `app/Services/Leaderboard/`: `LeaderboardStatsService` (five read-only
-  boards: longest life alive/all-time, most kills, longest kill streak, longest-distance kills —
-  all computed from `lives`/`game_sessions`/`players`, no kills table), `LeaderboardComposer`
+- **Leaderboard** — `app/Services/Leaderboard/`: `LeaderboardStatsService` (seven read-only
+  boards: longest life alive/all-time, most kills, longest kill streak, longest-distance kills,
+  most bunker visits, quickest new-life→bunker — all computed from
+  `lives`/`game_sessions`/`players`/`bunker_visits`, no kills table), `LeaderboardComposer`
   (pure → Discord-agnostic embed payload; plain backticked gamertags, **never @-mentions**),
   `DiscordLeaderboardNotifier` / `NullLeaderboardNotifier` (post-or-edit a single embed, message
   id persisted in `bot_state` as `leaderboard_message_id`/`leaderboard_channel_id`), and the
   `LivePlaytime` helper (`app/Services/Life/`) for open-life elapsed playtime. Periodic
   `LeaderboardService` (default 15m, `config/leaderboard.php`). Not gated by `BAN_DRY_RUN`
-  (read-only). The all-time-life and kill-streak boards dedupe to one entry per player.
+  (read-only). The all-time-life, kill-streak, and quickest-to-bunker boards dedupe to one entry
+  per player; `countRows` takes singular/plural noun args (default `kill`/`kills`).
+- **Bunker visits** — `app/Services/Bunker/BunkerVisitService.php` + `config/bunker.php`. The server's
+  bunker teleports a player who logs out inside the restricted area; on reconnect the ADM logs an
+  explicit `... was teleported ... Reason: Spawning in Player Restricted Area:
+  RestrictedAreaBunkerEntrance` line. **Detection is that self-labeling reason string — NOT a
+  coordinate/proximity check** (`AdmParser::parseBunkerEntrance`). `AdmIngestor` records each entrance
+  via `BunkerVisitService::record`, which de-dupes rapid relogs inside the bunker with a per-player
+  cooldown (`BUNKER_VISIT_COOLDOWN_MINUTES`, default 60) and associates the life whose
+  `[started_at, ended_at)` window contains the visit (a logout doesn't end a life; correct for live
+  ingest AND backfill — never `openLife()`). Visits with no containing life store `life_id = null`
+  (counted in totals, excluded from the quickest board). Stored in `bunker_visits`. Two leaderboard
+  boards read it (see above). Backfill historical visits with `adm:backfill-bunker-visits` (idempotent
+  via the cooldown). DB-only; **not gated by `BAN_DRY_RUN`**. `config/bunker.php` defaults pinned in
+  `phpunit.xml`. When `BUNKER_TRACKING_ENABLED=false`, `record()` is a no-op.
 - **Nickname on link** — `/link` (invoker) and `/adminlink` (target user) set the member's server
   nickname to their gamertag, best-effort via `app/SlashCommands/Concerns/RenamesToGamertag`
   (swallows failures; needs the bot to have Manage Nicknames and a role above the target — and it
