@@ -234,7 +234,7 @@ every `LEADERBOARD_REFRESH_MINUTES` minutes (default 15) with seven boards:
 | Longest kill streak | Top players by their best consecutive-kill streak (one entry per player) |
 | Longest-distance kills | Top confirmed kills sorted by distance (metres) |
 | Most bunker visits | Top players by total bunker visits |
-| Quickest new life → bunker | Top players by their fastest life-start → bunker time (one entry per player) |
+| Quickest new life → bunker | Top players by their fastest playtime from life start to the bunker — offline time excluded (one entry per player) |
 
 The embed message id is persisted in `bot_state` so the bot edits the same message on each
 refresh rather than spamming the channel. Gamertags are shown as plain backticked text —
@@ -254,8 +254,9 @@ check. Each detected entrance is recorded as one row in `bunker_visits`.
 Rapid relogs inside the bunker would each emit an entrance line, so visits are de-duped per player
 within `BUNKER_VISIT_COOLDOWN_MINUTES` (default 60). Each visit is associated with the life it
 occurred in (a logout doesn't end a life), which powers the two leaderboard boards above —
-**Most bunker visits** and **Quickest new life → bunker** (life start → first bunker visit, best
-per player).
+**Most bunker visits** and **Quickest new life → bunker** (playtime from life start to the first
+bunker visit — offline time excluded, consistent with how life duration is measured — best per
+player).
 
 Visits are recorded going forward during normal ingest. To capture history, run:
 

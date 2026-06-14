@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BunkerVisit;
+use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
 use App\Services\Leaderboard\LeaderboardStatsService;
@@ -12,11 +13,22 @@ uses(RefreshDatabase::class);
 function seedVisit(string $tag, string $lifeStart, string $visitedAt): void
 {
     $player = Player::firstOrCreate(['gamertag' => $tag]);
-    $life = Life::create(['player_id' => $player->id, 'started_at' => CarbonImmutable::parse($lifeStart)]);
+    $start = CarbonImmutable::parse($lifeStart);
+    $visit = CarbonImmutable::parse($visitedAt);
+    $life = Life::create(['player_id' => $player->id, 'started_at' => $start]);
+    // A single continuous session from life start to the visit (no offline gap), so
+    // playtime-to-bunker equals the wall-clock delta for these baseline tests.
+    GameSession::create([
+        'player_id' => $player->id,
+        'life_id' => $life->id,
+        'connected_at' => $start,
+        'disconnected_at' => $visit,
+        'duration_seconds' => $visit->getTimestamp() - $start->getTimestamp(),
+    ]);
     BunkerVisit::create([
         'player_id' => $player->id,
         'life_id' => $life->id,
-        'visited_at' => CarbonImmutable::parse($visitedAt),
+        'visited_at' => $visit,
     ]);
 }
 
@@ -74,6 +86,34 @@ it('breaks most-visits ties by earliest first visit', function () {
         ['gamertag' => 'Bob', 'bunker_visits' => 2],
         ['gamertag' => 'Alice', 'bunker_visits' => 2],
     ]);
+});
+
+it('measures quickest-to-bunker by playtime, excluding time logged off', function () {
+    $player = Player::create(['gamertag' => 'Solo']);
+    $life = Life::create(['player_id' => $player->id, 'started_at' => CarbonImmutable::parse('2026-06-14 10:00:00')]);
+
+    // Played 30 min, logged off for 2.5h, then relogged straight into the bunker.
+    GameSession::create([
+        'player_id' => $player->id, 'life_id' => $life->id,
+        'connected_at' => CarbonImmutable::parse('2026-06-14 10:00:00'),
+        'disconnected_at' => CarbonImmutable::parse('2026-06-14 10:30:00'),
+        'duration_seconds' => 1800,
+    ]);
+    GameSession::create([ // the bunker spawn-in session; starts at the visit moment
+        'player_id' => $player->id, 'life_id' => $life->id,
+        'connected_at' => CarbonImmutable::parse('2026-06-14 13:00:00'),
+        'disconnected_at' => CarbonImmutable::parse('2026-06-14 13:20:00'),
+        'duration_seconds' => 1200,
+    ]);
+    BunkerVisit::create([
+        'player_id' => $player->id, 'life_id' => $life->id,
+        'visited_at' => CarbonImmutable::parse('2026-06-14 13:00:00'),
+    ]);
+
+    $rows = (new LeaderboardStatsService())->quickestNewLifeToBunker(5);
+
+    // 30 min of playtime to the bunker — NOT the 3h wall-clock span.
+    expect($rows)->toBe([['gamertag' => 'Solo', 'seconds' => 1800]]);
 });
 
 it('breaks quickest-to-bunker ties by earliest life start', function () {

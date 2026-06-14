@@ -121,10 +121,15 @@ Two new boards added to the existing single embed (no structural change):
   `COUNT(*)` grouped by player, `ORDER BY count DESC, MIN(visited_at) ASC` (earliest-to-reach wins
   ties). Rendered with the existing `countRows($rows, 'bunker_visits')`.
 - **`quickestNewLifeToBunker(int $limit): array`** → rows `['gamertag' => ..., 'seconds' => S]`.
-  For each life with ≥1 visit, `seconds = MIN(visited_at) - life.started_at`; take each player's
-  minimum (one row per player, like the all-time-life board); `ORDER BY seconds ASC` with earliest
-  life `started_at` as tie-break. Lives/visits with `life_id = null` are excluded. Rendered with the
-  existing `durationRows`.
+  For each life with ≥1 visit, `seconds` = **playtime** accrued from life start to the first visit
+  (sum of connected session time, offline gaps excluded — consistent with `LivePlaytime`), take each
+  player's minimum (one row per player, like the all-time-life board); `ORDER BY seconds ASC` with
+  earliest life `started_at` as tie-break. Lives/visits with `life_id = null`, and lives with no
+  recorded session time before the visit, are excluded. Rendered with the existing `durationRows`.
+
+  > **Correction (2026-06-14, post-release):** originally implemented as wall-clock
+  > `MIN(visited_at) - life.started_at`, which counted hours the player was logged off and could
+  > exceed the life's own playtime. Fixed to measure playtime-to-bunker (see above).
 
 Composer adds two fields:
 
