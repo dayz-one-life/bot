@@ -40,8 +40,25 @@ class LifeFactsBuilder
             // No prior ended life => this is the player's very first life (a life only ends on death,
             // so "no prior death" == "first life"). Used so the birth notice doesn't invent a past life.
             'is_first_life' => $prior === null,
-            'raw_log' => $life->death_log,
+            'raw_log' => $this->stripLocations($life->death_log),
         ];
+    }
+
+    /**
+     * Strip ADM position/coordinate data from a raw-log excerpt so a birth/death post can never
+     * reveal a player's map location (where they died, their body, their base). Distances like
+     * "from 153.4 meters" are NOT locations and are kept.
+     */
+    private function stripLocations(?string $log): ?string
+    {
+        if ($log === null || $log === '') {
+            return $log;
+        }
+
+        $clean = preg_replace('/\s*pos=<[^>]*>/', '', $log);                            // "pos=<x, y, z>"
+        $clean = preg_replace('/\s*<\s*-?[\d.]+(?:\s*,\s*-?[\d.]+){1,2}\s*>/', '', $clean); // bare <a, b, c> (teleport to:/from:)
+
+        return $clean;
     }
 
     /** @return string[] */

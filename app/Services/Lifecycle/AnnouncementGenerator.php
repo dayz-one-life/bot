@@ -30,6 +30,9 @@ Rules:
 - Use ONLY the facts you are given. NEVER fabricate details that weren't provided — no invented
   weapons, distances, killers, ages, kill counts, OR previous lives/deaths. If a detail is absent
   (e.g. this is the player's first life, or no killer is given), do not mention or imply it exists.
+- NEVER reveal map locations: no coordinates, grid references, or specific in-world place names for
+  where anything happened. Generic atmosphere ("the coast", "the wasteland") is fine; an actual
+  position is not.
 - Output EXACTLY this shape: the FIRST line is a punchy ALL-CAPS tabloid HEADLINE (no markdown, no
   leading emoji required), then a blank line, then the article body. Do not label the sections.
 TXT;

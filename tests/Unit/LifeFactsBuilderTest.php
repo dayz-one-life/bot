@@ -34,6 +34,23 @@ it('builds facts for a pvp death', function () {
     expect($facts['associates'])->toBeArray();
 });
 
+it('strips map coordinates from the raw log fed to the LLM', function () {
+    $p = Player::create(['gamertag' => 'Loc', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create([
+        'player_id' => $p->id, 'started_at' => '2026-06-14T11:00:00Z', 'ended_at' => '2026-06-14T11:30:00Z',
+        'death_cause' => 'pvp', 'playtime_seconds' => 1800,
+        'death_log' => '11:30 | Player "Loc" (id=L= pos=<5154.0, 1075.1, 56.3>) killed by Player "K" (id=K= pos=<900.0, 950.0, 5.0>) with M4A1 from 153.4 meters',
+    ]);
+
+    $facts = (new LifeFactsBuilder())->build($life);
+
+    expect($facts['raw_log'])->not->toContain('pos=<');
+    expect($facts['raw_log'])->not->toContain('5154');
+    expect($facts['raw_log'])->not->toContain('950.0');
+    expect($facts['raw_log'])->toContain('from 153.4 meters'); // distance kept — it's a range, not a location
+    expect($facts['raw_log'])->toContain('killed by Player "K"');
+});
+
 it('marks a sole life as the first life (no prior death)', function () {
     $p = Player::create(['gamertag' => 'Newbie', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     $only = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
