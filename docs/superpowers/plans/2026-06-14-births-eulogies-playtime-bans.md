@@ -1226,7 +1226,7 @@ use App\Services\Personality\MessagePicker;
 /**
  * Builds the birth/eulogy prompt from structured facts (+ raw log), calls OpenRouter, and parses
  * the result into headline + body. Any failure (no key, timeout, non-2xx, empty) falls back to the
- * canned birth.*/eulogy.* personality pools. Placeholders {{PLAYER}}/{{KILLER}} are left intact for
+ * canned `birth.` / `eulogy.` personality pools. Placeholders {{PLAYER}}/{{KILLER}} are left intact for
  * the announcer to substitute.
  */
 class AnnouncementGenerator
