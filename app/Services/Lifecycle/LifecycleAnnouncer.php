@@ -102,12 +102,38 @@ class LifecycleAnnouncer
         ];
     }
 
+    /**
+     * The plain content line carrying real <@id> notifications (Discord doesn't notify on mentions
+     * inside an embed). Pings the subject if linked, and — for a eulogy — the killer if linked too.
+     * Only real mentions (resolved to <@id>) are included; an unlinked name would add noise without
+     * a ping, so it is omitted. Returns null when there is nobody to notify.
+     */
     private function ping(array $facts, string $verb): ?string
     {
-        if (! $facts['linked']) return null;
         $sub = $this->substitutor ?? new MentionSubstitutor();
-        $mention = $sub->apply('{{PLAYER}}', ['{{PLAYER}}' => $facts['gamertag']]);
-        return $verb === 'born' ? "🎉 {$mention} enters the world." : "🕯️ {$mention} has fallen.";
+
+        $subject = $facts['linked']
+            ? $sub->apply('{{PLAYER}}', ['{{PLAYER}}' => $facts['gamertag']])
+            : null;
+
+        if ($verb === 'born') {
+            return $subject ? "🎉 {$subject} enters the world." : null;
+        }
+
+        $line = $subject ? "🕯️ {$subject} has fallen." : null;
+
+        // Also ping the killer, but only when they're a linked player (a real <@id> mention).
+        $killer = $facts['killer'] ?? null;
+        if ($killer !== null) {
+            $killerMention = $sub->apply('{{KILLER}}', ['{{KILLER}}' => $killer]);
+            if (str_starts_with($killerMention, '<@')) {
+                $line = $line === null
+                    ? "🎯 {$killerMention} claimed a life."
+                    : $line." 🎯 {$killerMention} gets the credit.";
+            }
+        }
+
+        return $line;
     }
 
     /** @return array<int,array{name:string,value:string}> */

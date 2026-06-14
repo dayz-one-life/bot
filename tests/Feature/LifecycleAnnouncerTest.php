@@ -112,6 +112,17 @@ it('pings linked players on the content line, not unlinked', function () {
     expect($this->notifier->eulogies[0]['description'])->not->toContain('{{PLAYER}}'); // substituted
 });
 
+it('also pings a linked killer on the eulogy content line', function () {
+    // lifeWith() sets death_by_gamertag => 'Sniper' for an ended life. Link Sniper so the eulogy
+    // ping notifies the killer too; the victim here is unlinked, isolating the killer ping.
+    Player::create(['gamertag' => 'Sniper', 'discord_user_id' => '777', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    lifeWith('FreshVictim', 600, '2026-06-14T11:58:00Z');
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->eulogies[0]['ping'])->toContain('<@777>'); // killer notified
+});
+
 it('posts BOTH a eulogy for the dead life and a birth for an immediate respawn', function () {
     // Normal player behavior: die, then click respawn and start over. The dead life (A) earns
     // its eulogy; the fresh respawn (B) earns its own birth the moment it passes the grace mark.
