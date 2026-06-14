@@ -25,5 +25,13 @@
         <env name="LEADERBOARD_TOP_COUNT" value="5"/>
         <env name="BUNKER_TRACKING_ENABLED" value="true"/>
         <env name="BUNKER_VISIT_COOLDOWN_MINUTES" value="60"/>
+        <env name="LIFECYCLE_ENABLED" value="true"/>
+        <env name="LIFE_GRACE_MINUTES" value="5"/>
+        <env name="BAN_MIN_PLAYTIME_MINUTES" value="60"/>
+        <env name="LIFECYCLE_MAX_AGE_MINUTES" value="30"/>
+        <env name="OPENROUTER_MODEL" value="anthropic/claude-haiku-4.5"/>
+        <env name="OPENROUTER_TIMEOUT_SECONDS" value="20"/>
+        <env name="OPENROUTER_MAX_TOKENS" value="900"/>
+        <env name="OPENROUTER_TEMPERATURE" value="1.0"/>
     </php>
 </phpunit>
