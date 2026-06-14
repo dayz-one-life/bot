@@ -13,6 +13,7 @@ function genFacts(array $over = []): array {
         'weapon' => 'SVD', 'distance_m' => 312.5,
         'playtime_human' => '41 minutes', 'playtime_seconds' => 2460, 'associates' => ['Buddy'],
         'prior_death' => null, 'raw_log' => "00:02 hit\n00:03 killed by Sniper",
+        'witnesses' => ['Charlie', 'Dave'],
     ], $over);
 }
 
@@ -61,6 +62,19 @@ it('birth prompt for a first life omits age and never implies a prior life', fun
             && ! str_contains($user, 'age_wall_clock')
             && ! str_contains($user, '41 minutes');      // no current-life age leaks in
     });
+});
+
+it('passes real active survivors for witness quotes (births and eulogies)', function () {
+    Http::fake(['*/chat/completions' => Http::response(['choices' => [['message' => ['content' => "H\n📰 body"]]]])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    $gen->generate('eulogy', genFacts(['witnesses' => ['Charlie', 'Dave']]));
+    $gen->generate('birth', genFacts(['is_first_life' => true, 'witnesses' => ['Eve']]));
+
+    Http::assertSent(fn ($r) => str_contains($r['messages'][1]['content'], 'real_survivors_for_quotes')
+        && str_contains($r['messages'][1]['content'], 'Charlie') && str_contains($r['messages'][1]['content'], 'Dave'));
+    Http::assertSent(fn ($r) => str_contains($r['messages'][1]['content'], '"real_survivors_for_quotes"')
+        && str_contains($r['messages'][1]['content'], 'Eve'));
 });
 
 it('birth prompt for a respawn passes the real prior-life summary', function () {
