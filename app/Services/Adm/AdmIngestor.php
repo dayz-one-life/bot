@@ -3,28 +3,20 @@
 namespace App\Services\Adm;
 
 use App\Models\AdmFile;
-use App\Services\Connection\ConnectionNotifier;
-use App\Services\Connection\NullConnectionNotifier;
 use App\Services\Life\LifeTracker;
 use App\Services\Nitrado\NitradoClient;
 use App\Services\State\BotState;
-use Carbon\CarbonImmutable;
 
 class AdmIngestor
 {
     private PositionRecorder $positions;
 
-    private ConnectionNotifier $connections;
-
     public function __construct(
         private AdmParser $parser,
         private LifeTracker $tracker,
         ?PositionRecorder $positions = null,
-        ?ConnectionNotifier $connections = null,
-        private int $announceMaxAgeMinutes = 10,
     ) {
         $this->positions = $positions ?? new PositionRecorder();
-        $this->connections = $connections ?? new NullConnectionNotifier();
     }
 
     /**
@@ -68,7 +60,7 @@ class AdmIngestor
 
             $cursor = $row?->last_processed_line ?? 0;
             $fallback = $file['timestamp'] ?? new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-            $newCursor = $this->processFile($content, $cursor, $fallback, $offsetMs, $isLive);
+            $newCursor = $this->processFile($content, $cursor, $fallback, $offsetMs);
 
             AdmFile::updateOrCreate(
                 ['path' => $file['path']],
@@ -91,7 +83,7 @@ class AdmIngestor
      * Apply events from a file's content, starting at $cursor (0-based line index).
      * $offsetMs converts server-local log time to UTC. Returns the new cursor (line count).
      */
-    public function processFile(string $content, int $cursor, \DateTimeImmutable $fallbackDate, int $offsetMs, bool $announce = false): int
+    public function processFile(string $content, int $cursor, \DateTimeImmutable $fallbackDate, int $offsetMs): int
     {
         $lines = preg_split('/\r\n|\r|\n/', $content);
         $total = count($lines);
@@ -118,14 +110,8 @@ class AdmIngestor
 
             if ($c = $this->parser->parseConnect($raw)) {
                 $this->tracker->connect($c['gamertag'], $ts);
-                if ($announce && $this->isFresh($ts)) {
-                    $this->connections->connected($c['gamertag'], $ts);
-                }
             } elseif ($d = $this->parser->parseDisconnect($raw)) {
-                $closed = $this->tracker->disconnect($d['gamertag'], $ts);
-                if ($announce && $this->isFresh($ts)) {
-                    $this->connections->disconnected($d['gamertag'], $ts, $closed?->duration_seconds);
-                }
+                $this->tracker->disconnect($d['gamertag'], $ts);
             } elseif ($k = $this->parser->parseDeath($raw)) {
                 $this->tracker->death($k, $ts);
             }
@@ -136,14 +122,6 @@ class AdmIngestor
         }
 
         return $total;
-    }
-
-    /** True when an event is recent enough to announce (suppresses stale post-restart backlog). */
-    private function isFresh(\DateTimeImmutable $ts): bool
-    {
-        $cutoff = CarbonImmutable::now()->subMinutes($this->announceMaxAgeMinutes)->getTimestamp();
-
-        return $ts->getTimestamp() >= $cutoff;
     }
 
     private function fromMs(int $ms): \DateTimeImmutable

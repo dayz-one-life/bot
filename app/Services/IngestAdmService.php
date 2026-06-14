@@ -34,11 +34,6 @@ class IngestAdmService extends Service
             $ingestor = new AdmIngestor(
                 new AdmParser(),
                 new LifeTracker(),
-                connections: new \App\Services\Connection\DiscordConnectionNotifier(
-                    $this->discord(),
-                    env('CONNECTIONS_CHANNEL_ID'),
-                ),
-                announceMaxAgeMinutes: (int) env('CONNECTIONS_MAX_AGE_MINUTES', 10),
             );
             $client = new NitradoClient($token, $serviceId);
             $state = new BotState();

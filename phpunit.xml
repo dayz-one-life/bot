@@ -17,7 +17,8 @@
         <env name="BOUNTY_ASSOC_WEIGHT_COPRES" value="0.35"/>
         <env name="BOUNTY_ASSOC_WEIGHT_KILLG" value="0.10"/>
         <env name="BOUNTY_POSITION_RETENTION_DAYS" value="0"/>
-        <env name="CONNECTIONS_MAX_AGE_MINUTES" value="10"/>
+        <env name="CONNECTIONS_ENABLED" value="true"/>
+        <env name="CONNECTIONS_REFRESH_MINUTES" value="5"/>
         <env name="DEATH_FEED_MAX_AGE_MINUTES" value="10"/>
         <env name="LEADERBOARD_ENABLED" value="true"/>
         <env name="LEADERBOARD_REFRESH_MINUTES" value="15"/>
