@@ -32,7 +32,7 @@ class LifeTracker
     /**
      * @param array{victim:string,cause:string,killer:?string,weapon?:?string,distance?:?float} $death
      */
-    public function death(array $death, \DateTimeImmutable $ts): void
+    public function death(array $death, \DateTimeImmutable $ts, ?string $log = null): void
     {
         $player = Player::where('gamertag', $death['victim'])->first();
         if (! $player) return; // never-seen player, only a (duplicate) death line — ignore
@@ -54,6 +54,7 @@ class LifeTracker
             'death_by_gamertag' => $death['killer'],
             'death_weapon' => $death['weapon'] ?? null,
             'death_distance' => $death['distance'] ?? null,
+            'death_log' => $log,
         ]);
     }
 
