@@ -111,3 +111,30 @@ it('pings linked players on the content line, not unlinked', function () {
     expect($this->notifier->eulogies[0]['ping'])->toContain('<@555>');
     expect($this->notifier->eulogies[0]['description'])->not->toContain('{{PLAYER}}'); // substituted
 });
+
+it('posts BOTH a eulogy for the dead life and a birth for an immediate respawn', function () {
+    // Normal player behavior: die, then click respawn and start over. The dead life (A) earns
+    // its eulogy; the fresh respawn (B) earns its own birth the moment it passes the grace mark.
+    // These are independent lives — the birth is NOT suppressed just because a death just happened.
+    $lifeA = lifeWith('Comeback', 2460, '2026-06-14T11:58:00Z', '2026-06-14T11:10:00Z'); // 41 min, just died
+    $lifeA->update(['birth_announced_at' => '2026-06-14T11:15:00Z']); // A was already born earlier in its own life
+    $lifeB = lifeWith('Comeback', 360, null, '2026-06-14T11:58:30Z'); // respawn, 6 min in, still alive
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->eulogies)->toHaveCount(1);            // for the life that died
+    expect($this->notifier->births)->toHaveCount(1);             // for the immediate respawn
+    expect($lifeB->fresh()->birth_announced_at)->not->toBeNull();
+});
+
+it('does NOT birth an immediate respawn that rerolls under the grace mark', function () {
+    // The flip side: a respawn that suicides again before 5 min (spawn reroll) gets no birth.
+    $lifeA = lifeWith('Rerollman', 2460, '2026-06-14T11:58:00Z', '2026-06-14T11:10:00Z');
+    $lifeA->update(['birth_announced_at' => '2026-06-14T11:15:00Z']);
+    lifeWith('Rerollman', 90, '2026-06-14T11:59:45Z', '2026-06-14T11:58:15Z'); // 90s reroll, died
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->eulogies)->toHaveCount(1); // only the real life A
+    expect($this->notifier->births)->toBeEmpty();      // the 90s reroll never reached grace
+});
