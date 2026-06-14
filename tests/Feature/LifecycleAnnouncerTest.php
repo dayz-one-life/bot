@@ -1,0 +1,113 @@
+<?php
+
+use App\Models\GameSession;
+use App\Models\Life;
+use App\Models\Player;
+use App\Services\Lifecycle\AnnouncementGenerator;
+use App\Services\Lifecycle\LifecycleAnnouncer;
+use App\Services\Lifecycle\LifecycleNotifier;
+use App\Services\Llm\OpenRouterClient;
+use App\Services\Personality\MessagePicker;
+use App\Services\State\BotState;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Http;
+
+class RecordingLifecycleNotifier implements LifecycleNotifier {
+    public array $births = [];
+    public array $eulogies = [];
+    public function publishBirth(array $payload): void { $this->births[] = $payload; }
+    public function publishEulogy(array $payload): void { $this->eulogies[] = $payload; }
+}
+
+beforeEach(function () {
+    CarbonImmutable::setTestNow('2026-06-14T12:00:00Z');
+    Http::fake(); // no api key in tests => generator falls back; never calls out
+    MessagePicker::reset();
+    $this->state = new BotState();
+    $this->state->set('go_live_at', '2026-06-14T08:00:00+00:00');
+    $this->notifier = new RecordingLifecycleNotifier();
+});
+afterEach(fn () => CarbonImmutable::setTestNow());
+
+function makeAnnouncer($state, $notifier): LifecycleAnnouncer {
+    $gen = new AnnouncementGenerator(OpenRouterClient::fromConfig(), new MessagePicker(fn ($p, $a) => 0));
+    return new LifecycleAnnouncer($gen, $notifier, $state, graceSeconds: 300, maxAgeMinutes: 30);
+}
+
+// A life with a single CLOSED session of $playtime seconds, ended (death) or still open.
+function lifeWith(string $tag, int $playtime, ?string $endedAt, ?string $startedAt = null): Life {
+    $p = Player::firstOrCreate(['gamertag' => $tag], ['first_seen_at' => now(), 'last_seen_at' => now()]);
+    $start = $startedAt ?? '2026-06-14T11:50:00Z';
+    $life = Life::create([
+        'player_id' => $p->id, 'started_at' => $start, 'ended_at' => $endedAt,
+        'death_cause' => $endedAt ? 'pvp' : null, 'death_by_gamertag' => $endedAt ? 'Sniper' : null,
+        'playtime_seconds' => $playtime,
+    ]);
+    GameSession::create([
+        'player_id' => $p->id, 'life_id' => $life->id, 'connected_at' => $start,
+        'disconnected_at' => $endedAt ?? CarbonImmutable::parse($start)->addSeconds($playtime),
+        'duration_seconds' => $playtime,
+    ]);
+    return $life;
+}
+
+it('announces a birth for an open life past the grace window and marks it', function () {
+    $life = lifeWith('Sticky', 360, null); // 6 min playtime, still alive
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->births)->toHaveCount(1);
+    expect($life->fresh()->birth_announced_at)->not->toBeNull();
+});
+
+it('does NOT announce a birth before the grace window', function () {
+    lifeWith('TooNew', 120, null); // 2 min
+    makeAnnouncer($this->state, $this->notifier)->run();
+    expect($this->notifier->births)->toBeEmpty();
+});
+
+it('eulogizes a real death (>= grace) and marks eulogy_posted', function () {
+    $life = lifeWith('Fallen', 2460, '2026-06-14T11:58:00Z'); // 41 min, died 2 min ago
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->eulogies)->toHaveCount(1);
+    expect($life->fresh()->eulogy_posted)->toBeTrue();
+});
+
+it('does NOT eulogize a reroll death under the grace window', function () {
+    lifeWith('Reroll', 40, '2026-06-14T11:59:00Z'); // 40s life, died 1 min ago
+    makeAnnouncer($this->state, $this->notifier)->run();
+    expect($this->notifier->eulogies)->toBeEmpty();
+});
+
+it('does not announce births/eulogies for events before go_live', function () {
+    lifeWith('OldDeath', 3000, '2026-06-14T07:00:00Z', '2026-06-14T06:00:00Z'); // before go_live
+    makeAnnouncer($this->state, $this->notifier)->run();
+    expect($this->notifier->eulogies)->toBeEmpty();
+    expect($this->notifier->births)->toBeEmpty();
+});
+
+it('does not announce stale eulogies past the freshness window', function () {
+    lifeWith('Stale', 3000, '2026-06-14T11:00:00Z', '2026-06-14T10:00:00Z'); // died 60 min ago, window 30
+    makeAnnouncer($this->state, $this->notifier)->run();
+    expect($this->notifier->eulogies)->toBeEmpty();
+});
+
+it('is idempotent across ticks', function () {
+    lifeWith('Once', 2460, '2026-06-14T11:58:00Z');
+    $a = makeAnnouncer($this->state, $this->notifier);
+    $a->run();
+    $a->run();
+    expect($this->notifier->eulogies)->toHaveCount(1);
+});
+
+it('pings linked players on the content line, not unlinked', function () {
+    $p = Player::where('gamertag', 'LinkedDead')->first()
+        ?? Player::create(['gamertag' => 'LinkedDead', 'discord_user_id' => '555', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $life = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'ended_at' => '2026-06-14T11:58:00Z', 'death_cause' => 'pvp', 'playtime_seconds' => 480]);
+    GameSession::create(['player_id' => $p->id, 'life_id' => $life->id, 'connected_at' => '2026-06-14T11:50:00Z', 'disconnected_at' => '2026-06-14T11:58:00Z', 'duration_seconds' => 480]);
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    expect($this->notifier->eulogies[0]['ping'])->toContain('<@555>');
+    expect($this->notifier->eulogies[0]['description'])->not->toContain('{{PLAYER}}'); // substituted
+});
