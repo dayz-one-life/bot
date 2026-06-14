@@ -43,6 +43,38 @@ it('falls back to a canned eulogy when the client throws', function () {
     expect($out['body'])->toContain('{{KILLER}}');
 });
 
+it('birth prompt for a first life omits age and never implies a prior life', function () {
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "WELCOME\n📰 {{PLAYER}} arrives."]]],
+    ])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    $gen->generate('birth', genFacts(['is_first_life' => true, 'prior_death' => null]));
+
+    Http::assertSent(function ($r) {
+        $user = $r['messages'][1]['content'];
+        return str_contains($user, '"is_first_life_ever": true')
+            && ! str_contains($user, 'age_playtime')    // newborn age is never sent
+            && ! str_contains($user, 'age_wall_clock')
+            && ! str_contains($user, '41 minutes');      // no current-life age leaks in
+    });
+});
+
+it('birth prompt for a respawn passes the real prior-life summary', function () {
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "BACK\n📰 {{PLAYER}} returns."]]],
+    ])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    $gen->generate('birth', genFacts(['is_first_life' => false, 'prior_death' => 'previous life ended (pvp) after 18 minutes']));
+
+    Http::assertSent(function ($r) {
+        $user = $r['messages'][1]['content'];
+        return str_contains($user, '"is_first_life_ever": false')
+            && str_contains($user, 'previous life ended (pvp) after 18 minutes');
+    });
+});
+
 it('falls back to a canned birth when there is no api key', function () {
     Http::fake();
     $gen = new AnnouncementGenerator(

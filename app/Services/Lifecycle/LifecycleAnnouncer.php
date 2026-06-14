@@ -89,17 +89,38 @@ class LifecycleAnnouncer
      */
     private function payload(array $copy, array $facts, int $color, Life $life, string $verb): array
     {
-        $sub = $this->substitutor ?? new MentionSubstitutor();
-        $map = ['{{PLAYER}}' => $facts['gamertag'], '{{KILLER}}' => $facts['killer']];
+        // PLAIN gamertags inside the embed — NOT <@id> mentions. Discord renders a mention in an
+        // embed *description* but NOT in the *title* (it shows the raw "<@123>"), and a newspaper
+        // article reads better with the bare name anyway. The real, notifying mention rides the
+        // content `ping` line instead (see ping()).
+        $names = $this->nameMap($facts);
 
         return [
             'ping' => $this->ping($facts, $verb),
-            'title' => $sub->apply($copy['headline'], $map),
-            'description' => $sub->apply($copy['body'], $map),
+            'title' => strtr($copy['headline'], $names),
+            'description' => strtr($copy['body'], $names),
             'fields' => $this->fields($facts, $verb),
             'color' => $color,
             'footer' => $this->footer($life, $verb),
         ];
+    }
+
+    /**
+     * Placeholder -> plain gamertag (nulls skipped so an absent killer leaves no stray token value).
+     *
+     * @param array<string,mixed> $facts
+     * @return array<string,string>
+     */
+    private function nameMap(array $facts): array
+    {
+        $map = [];
+        foreach (['{{PLAYER}}' => $facts['gamertag'], '{{KILLER}}' => $facts['killer']] as $token => $gamertag) {
+            if ($gamertag !== null && $gamertag !== '') {
+                $map[$token] = $gamertag;
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -139,15 +160,22 @@ class LifecycleAnnouncer
     /** @return array<int,array{name:string,value:string}> */
     private function fields(array $facts, string $verb): array
     {
-        $fields = [['name' => '🎂 Age', 'value' => "{$facts['wall_age_human']} ({$facts['playtime_human']} played)"]];
+        // A newborn life has no meaningful stats yet — its "age" is always just the grace window,
+        // and "associates left behind" only makes sense for a death. So births carry no fields;
+        // the footer already says "born N ago".
+        if ($verb !== 'died') {
+            return [];
+        }
 
-        if ($verb === 'died') {
-            $fields[] = ['name' => '☠️ Cause', 'value' => ucfirst((string) ($facts['cause'] ?? 'unknown'))];
-            if ($facts['killer']) {
-                $weapon = $facts['weapon'] ? " with {$facts['weapon']}" : '';
-                $dist = $facts['distance_m'] !== null ? ' @ '.round((float) $facts['distance_m']).'m' : '';
-                $fields[] = ['name' => '🔫 Killer', 'value' => "`{$facts['killer']}`{$weapon}{$dist}"];
-            }
+        $fields = [
+            ['name' => '🎂 Age', 'value' => "{$facts['wall_age_human']} ({$facts['playtime_human']} played)"],
+            ['name' => '☠️ Cause', 'value' => ucfirst((string) ($facts['cause'] ?? 'unknown'))],
+        ];
+
+        if ($facts['killer']) {
+            $weapon = $facts['weapon'] ? " with {$facts['weapon']}" : '';
+            $dist = $facts['distance_m'] !== null ? ' @ '.round((float) $facts['distance_m']).'m' : '';
+            $fields[] = ['name' => '🔫 Killer', 'value' => "`{$facts['killer']}`{$weapon}{$dist}"];
         }
         if (! empty($facts['associates'])) {
             $fields[] = ['name' => '🤝 Known associates', 'value' => '`'.implode('`, `', $facts['associates']).'`'];
