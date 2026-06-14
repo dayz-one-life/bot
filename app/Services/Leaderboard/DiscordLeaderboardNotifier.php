@@ -110,6 +110,12 @@ class DiscordLeaderboardNotifier implements LeaderboardNotifier
      * Post boards one after another (chained promises) so they land in order,
      * accumulating ids, then persist the id list + channel.
      *
+     * Trade-off: if a send fails mid-sequence the chain stops and the id list is
+     * never persisted, so the next tick reflushes (self-healing) — but any boards
+     * already posted in the failed run have no stored id and won't be cleaned up,
+     * leaving rare orphan embeds until manual deletion. Acceptable for a low-stakes,
+     * 15-minute best-effort cosmetic feature.
+     *
      * @param  array<int, array{key:string, title:string, description:string}>  $payloads
      * @param  array<int, string>  $ids
      */
