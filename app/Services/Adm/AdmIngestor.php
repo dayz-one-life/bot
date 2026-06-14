@@ -12,15 +12,18 @@ class AdmIngestor
 {
     private PositionRecorder $positions;
     private BunkerVisitService $bunkerVisits;
+    private DeathLogCapturer $deathLog;
 
     public function __construct(
         private AdmParser $parser,
         private LifeTracker $tracker,
         ?PositionRecorder $positions = null,
         ?BunkerVisitService $bunkerVisits = null,
+        ?DeathLogCapturer $deathLog = null,
     ) {
         $this->positions = $positions ?? new PositionRecorder();
         $this->bunkerVisits = $bunkerVisits ?? new BunkerVisitService();
+        $this->deathLog = $deathLog ?? new DeathLogCapturer();
     }
 
     /**
@@ -97,6 +100,9 @@ class AdmIngestor
         // Rebuild timestamp context from the whole file (cheap; files are KB).
         $tsByLine = $this->parser->assignTimestamps($lines, $fallbackDate);
 
+        $recent = [];          // rolling buffer of recent raw lines (this file)
+        $recentCap = 200;      // bounded so memory stays flat on huge files
+
         for ($i = 0; $i < $total; $i++) {
             if ($i < $cursor) continue;
             $raw = $lines[$i];
@@ -117,7 +123,8 @@ class AdmIngestor
             } elseif ($d = $this->parser->parseDisconnect($raw)) {
                 $this->tracker->disconnect($d['gamertag'], $ts);
             } elseif ($k = $this->parser->parseDeath($raw)) {
-                $this->tracker->death($k, $ts);
+                $log = $this->deathLog->capture($recent, $k['victim'], $raw);
+                $this->tracker->death($k, $ts, $log);
             }
 
             if (($pos = $this->parser->parsePosition($raw)) !== null) {
@@ -126,6 +133,11 @@ class AdmIngestor
 
             if (($b = $this->parser->parseBunkerEntrance($raw)) !== null) {
                 $this->bunkerVisits->record($b['gamertag'], $ts);
+            }
+
+            $recent[] = $raw;
+            if (count($recent) > $recentCap) {
+                $recent = array_slice($recent, -$recentCap);
             }
         }
 

@@ -56,6 +56,21 @@ class MessagePicker
     }
 
     /**
+     * Anti-repeat index into a structured pool of $count entries for $key. Mirrors pick()'s
+     * chooser/anti-repeat behavior but returns the chosen index so callers can index their own
+     * (non-string) pools. Returns 0 when the pool is empty/singleton.
+     */
+    public function indexFor(string $key, int $count): int
+    {
+        if ($count <= 0) return 0;
+        $pool = array_fill(0, $count, null);
+        $index = ($this->chooser)($pool, self::$last[$key] ?? null);
+        self::$last[$key] = $index;
+
+        return $index;
+    }
+
+    /**
      * Clear the process-wide anti-repeat state. Intended for tests.
      */
     public static function reset(): void

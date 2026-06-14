@@ -101,8 +101,8 @@ return [
 
     'ban' => [
 
-        // NOTE: this 'death' pool is NO LONGER used for channel posts — the death feed
-        // (death.* pools, via DiscordDeathFeedNotifier) owns the public death+ban
+        // NOTE: this 'ban.death' pool is NO LONGER used for channel posts — the lifecycle
+        // eulogy feed (LifecycleAnnouncer, via eulogy.* pools) owns the public death
         // announcement (DiscordBanNotifier::postsToChannel suppresses 'ban.death'). The
         // banned player still gets the separate 'ban.dm.death' DM below. Retained as a
         // reference/fallback; do not re-wire the ban notifier to use it.
@@ -339,71 +339,36 @@ return [
 
     ],
 
-    'death' => [
+    'birth' => [
+        'fallback' => [
+            ['headline' => '👶 A NEW SOUL STUMBLES ONTO THE COAST', 'body' => "📰 *Chernarus, today* — {{PLAYER}} has clawed their way back into the land of the living. The locals are unimpressed. The bears are hungry. Welcome to the one life, again."],
+            ['headline' => '🎉 IT LIVES! {{PLAYER}} RESPAWNS', 'body' => "📰 Against all odds and most of their better judgment, {{PLAYER}} draws breath once more on the coast. Bookmakers are already taking bets on the cause of death."],
+            ['headline' => '🌅 FRESH MEAT REPORTS FOR DUTY', 'body' => "📰 A brand-new {{PLAYER}} blinks awake on the shoreline with nothing but a flashlight and unearned confidence. History suggests this ends poorly."],
+            ['headline' => '🧍 ANOTHER OPTIMIST ENTERS THE WORLD', 'body' => "📰 {{PLAYER}} has spawned. The coast welcomes them with damp socks and the distant sound of gunfire. Good luck out there — you'll need it."],
+            ['headline' => '🐣 THE CYCLE CONTINUES', 'body' => "📰 {{PLAYER}} is alive. For now. Survivors are advised to introduce themselves quickly, before the introduction becomes an obituary."],
+        ],
+    ],
 
+    'eulogy' => [
         'pvp' => [
-            '💀 :killer dropped :victim with a :weapon at :distancem. One life, well spent — back :expires.',
-            '💀 :killer reached out and touched :victim — :weapon, :distancem. See you :expires.',
-            '💀 :victim caught a :weapon from :killer at :distancem. That\'s the whole life gone, back :expires.',
-            '💀 :killer sent :victim to the lobby with a :weapon from :distancem out. Respawn unlocks :expires.',
-            '💀 :distancem was close enough for :killer\'s :weapon. RIP :victim — back :expires.',
-            '💀 :killer folded :victim at :distancem with a :weapon. Back in action :expires.',
-            '💀 :victim ate a :weapon round from :killer (:distancem). One and done — back :expires.',
-            '💀 Clean work by :killer: :victim down at :distancem with a :weapon. Out for now — back :expires.',
-            '💀 :killer\'s :weapon found :victim across :distancem. That\'s all she wrote — back :expires.',
-            '💀 :victim got beamed by :killer at :distancem (:weapon). Back :expires.',
+            ['headline' => '💀 {{PLAYER}} DROPPED — {{KILLER}} DECLINES COMMENT', 'body' => "📰 *Obituary* — {{PLAYER}} met their end at the hands of {{KILLER}}. A life of promise, ended with grim efficiency. They are survived by their loot, which {{KILLER}} now owns."],
+            ['headline' => '⚰️ THE LATE {{PLAYER}}: A LIFE, INTERRUPTED', 'body' => "📰 {{KILLER}} has ended the storied run of {{PLAYER}}. Witnesses report it was over quickly. Funeral arrangements are pending; the body is currently being looted."],
+            ['headline' => '🪦 {{PLAYER}} LOGS OFF PERMANENTLY', 'body' => "📰 In a development surprising no one, {{PLAYER}} has died — courtesy of {{KILLER}}. The coast observes a moment of silence, then resumes shooting."],
         ],
-
-        'pvp_noweapon' => [
-            '💀 :killer put :victim in the dirt. That\'s the one life — back :expires.',
-            '💀 :victim got sent to respawn by :killer. Back in action :expires.',
-            '💀 :killer ended :victim\'s run. See you :expires.',
-            '💀 :victim caught hands from :killer and lost. Benched — back :expires.',
-            '💀 :killer dropped :victim. One life, gone — back :expires.',
-            '💀 :victim\'s story ends here, courtesy of :killer. Respawn unlocks :expires.',
-            '💀 :killer collected :victim. That\'s a wrap — back :expires.',
-            '💀 :victim got got by :killer. Out for now — back :expires.',
-            '💀 :killer sent :victim packing. Returns :expires.',
-            '💀 RIP :victim — :killer said no. Back :expires.',
-        ],
-
         'suicide' => [
-            '💀 :victim rage-quit life itself. One life, self-served — back :expires.',
-            '💀 :victim took the express route to respawn. Back in action :expires.',
-            '💀 :victim decided the lobby looked nicer. Benched — back :expires.',
-            '💀 :victim pressed the big red button on their own run. Back :expires.',
-            '💀 :victim called it on their own terms. See you :expires.',
-            '💀 :victim speedran the death screen, solo. Respawn unlocks :expires.',
-            '💀 :victim opted out the hard way. Returns :expires.',
-            '💀 No killer needed — :victim handled it. Out for now — back :expires.',
-            '💀 :victim showed themselves the door. Back :expires.',
-            '💀 :victim ended their own run. One life, used — back :expires.',
+            ['headline' => '💀 {{PLAYER}} BEATS THE QUEUE, TAKES OWN LIFE', 'body' => "📰 *Obituary* — {{PLAYER}} has died by their own hand, cutting out the middleman entirely. Efficient. Bleak. On brand for Chernarus."],
+            ['headline' => '⚰️ {{PLAYER}} DECIDED THE LOBBY LOOKED NICER', 'body' => "📰 No killer required. {{PLAYER}} handled their own departure. The community is not so much mourning as quietly nodding."],
+            ['headline' => '🪦 {{PLAYER}} OPTS OUT', 'body' => "📰 {{PLAYER}} has self-deleted from the living. We hardly knew ye, and apparently neither did ye."],
         ],
-
         'environment' => [
-            '💀 The map itself claimed :victim. One life, gone — back :expires.',
-            '💀 :victim lost a fight with the great outdoors. Back in action :expires.',
-            '💀 Mother Nature 1, :victim 0. Benched — back :expires.',
-            '💀 :victim got got by the world, no players required. Back :expires.',
-            '💀 The environment filed :victim under "deceased." Respawn unlocks :expires.',
-            '💀 :victim found out the hard way that the map fights back. See you :expires.',
-            '💀 :victim was undone by Chernarus itself. Returns :expires.',
-            '💀 Something out there ended :victim. Out for now — back :expires.',
-            '💀 :victim met an unfriendly piece of scenery. Back :expires.',
-            '💀 No killcam for :victim — the world did it. Back on the menu :expires.',
+            ['headline' => '💀 {{PLAYER}} VS. THE MAP: THE MAP WINS', 'body' => "📰 *Obituary* — {{PLAYER}} was claimed not by a player but by Chernarus itself. No killcam. No glory. Just the quiet indignity of the great outdoors."],
+            ['headline' => '🐻 NATURE 1, {{PLAYER}} 0', 'body' => "📰 {{PLAYER}} lost a disagreement with the environment. The environment was unavailable for comment, being a fall, a wolf, or simple bad luck."],
+            ['headline' => '🪦 {{PLAYER}} UNDONE BY SCENERY', 'body' => "📰 In an ending devoid of witnesses, {{PLAYER}} was filed under 'deceased' by the world at large. A humble exit for a humble survivor."],
         ],
-
         'misc' => [
-            '💀 :victim :cause and lost their one life. Back :expires.',
-            '💀 :victim :cause — that\'s the run. Back in action :expires.',
-            '💀 :victim :cause. One life, spent — back :expires.',
-            '💀 Cause of death for :victim: :cause. Respawn unlocks :expires.',
-            '💀 :victim :cause and that was that. See you :expires.',
-            '💀 :victim :cause. Returns :expires.',
-            '💀 Turns out :victim :cause. Back :expires.',
-            '💀 :victim :cause — no take-backs. Out for now — back :expires.',
-            '💀 :victim :cause. The one life giveth, the one life taketh. Back :expires.',
-            '💀 :victim :cause. Back on the menu :expires.',
+            ['headline' => '💀 {{PLAYER}} HAS DIED', 'body' => "📰 *Obituary* — the run of {{PLAYER}} has come to its end. The precise circumstances are murky, but the result is permanent. Rest easy, survivor."],
+            ['headline' => '⚰️ THE BOOK CLOSES ON {{PLAYER}}', 'body' => "📰 {{PLAYER}} is no longer with us. Cause uncertain, outcome final. The coast moves on, as it always does."],
+            ['headline' => '🪦 {{PLAYER}}, GONE TOO SOON (OR NOT SOON ENOUGH)', 'body' => "📰 {{PLAYER}} has shuffled off the Chernarus coil. We raise a warm, expired can of beans in their memory."],
         ],
     ],
 ];

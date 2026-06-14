@@ -112,3 +112,20 @@ it('does not jump ahead to the newest file while older files are pending during 
     expect($state->get('mode'))->toBe('live');                                          // now caught up
     expect(Player::where('gamertag', 'Carol')->first())->not->toBeNull();               // applied in order
 });
+
+it('captures a death-window log onto the life', function () {
+    $content = implode("\n", [
+        '00:00:00 | Player "Doomed" (id=D=) is connected',
+        '00:01:00 | Player "Doomed" (id=D= pos=<1,2,3>)[HP: 30] hit by Player "Shooter" (id=S=) into Torso',
+        '00:02:00 | Player "Doomed" (DEAD) (id=D=) killed by Player "Shooter" (id=S=) with M4A1 from 100.0 meters',
+    ]);
+
+    $ingestor = new App\Services\Adm\AdmIngestor(new App\Services\Adm\AdmParser(), new App\Services\Life\LifeTracker());
+    $ingestor->processFile($content, 0, new DateTimeImmutable('2026-06-14T00:00:00Z'), 0);
+
+    $life = App\Models\Life::whereNotNull('ended_at')->first();
+    expect($life)->not->toBeNull();
+    expect($life->death_log)->toContain('hit by Player "Shooter"');
+    expect($life->death_log)->toContain('killed by Player "Shooter"');
+    expect($life->death_log)->not->toContain('Shooter" (id=S=) is connected'); // only victim-mentioning lines
+});
