@@ -29,13 +29,22 @@ it('builds facts for a pvp death', function () {
     expect($facts['killer'])->toBe('Sniper');
     expect($facts['weapon'])->toBe('SVD');
     expect($facts['distance_m'])->toBe(312.5);
-    expect($facts['wall_age_human'])->toContain('47');
-    expect($facts['playtime_human'])->toContain('41');
+    expect($facts['playtime_human'])->toContain('41'); // age == playtime (life clock), not wall-clock
     expect($facts['raw_log'])->toContain('raw line A');
     expect($facts['associates'])->toBeArray();
 });
 
-it('summarises the prior death for a birth (new open life)', function () {
+it('marks a sole life as the first life (no prior death)', function () {
+    $p = Player::create(['gamertag' => 'Newbie', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $only = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
+
+    $facts = (new LifeFactsBuilder())->build($only);
+
+    expect($facts['is_first_life'])->toBeTrue();
+    expect($facts['prior_death'])->toBeNull();
+});
+
+it('summarises the prior death for a respawn and marks it NOT the first life', function () {
     $p = Player::create(['gamertag' => 'Reborn', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T09:00:00Z', 'ended_at' => '2026-06-14T10:00:00Z', 'death_cause' => 'environment', 'playtime_seconds' => 3000]);
     $current = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
@@ -44,4 +53,5 @@ it('summarises the prior death for a birth (new open life)', function () {
 
     expect($facts['linked'])->toBeFalse();
     expect($facts['prior_death'])->toContain('environment');
+    expect($facts['is_first_life'])->toBeFalse();
 });
