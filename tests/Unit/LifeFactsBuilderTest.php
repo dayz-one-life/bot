@@ -51,6 +51,25 @@ it('strips map coordinates from the raw log fed to the LLM', function () {
     expect($facts['raw_log'])->toContain('killed by Player "K"');
 });
 
+it('offers recently-active players as witnesses, excluding the subject and killer', function () {
+    $subject = Player::create(['gamertag' => 'Subject', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T12:00:00Z']);
+    Player::create(['gamertag' => 'Sniper', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T12:00:00Z']);     // the killer
+    Player::create(['gamertag' => 'ActiveBob', 'first_seen_at' => '2026-06-01T00:00:00Z', 'last_seen_at' => '2026-06-14T11:00:00Z']);  // active
+    Player::create(['gamertag' => 'StaleSam', 'first_seen_at' => '2026-05-01T00:00:00Z', 'last_seen_at' => '2026-05-01T00:00:00Z']);   // inactive >14d
+
+    $life = Life::create([
+        'player_id' => $subject->id, 'started_at' => '2026-06-14T11:30:00Z', 'ended_at' => '2026-06-14T12:00:00Z',
+        'death_cause' => 'pvp', 'death_by_gamertag' => 'Sniper', 'playtime_seconds' => 1800,
+    ]);
+
+    $facts = (new LifeFactsBuilder())->build($life);
+
+    expect($facts['witnesses'])->toContain('ActiveBob');
+    expect($facts['witnesses'])->not->toContain('Subject');  // not the subject
+    expect($facts['witnesses'])->not->toContain('Sniper');   // not the killer
+    expect($facts['witnesses'])->not->toContain('StaleSam'); // inactive (>14 days)
+});
+
 it('marks a sole life as the first life (no prior death)', function () {
     $p = Player::create(['gamertag' => 'Newbie', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     $only = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
