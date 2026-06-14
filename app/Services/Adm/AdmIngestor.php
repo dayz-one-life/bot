@@ -3,6 +3,7 @@
 namespace App\Services\Adm;
 
 use App\Models\AdmFile;
+use App\Services\Bunker\BunkerVisitService;
 use App\Services\Life\LifeTracker;
 use App\Services\Nitrado\NitradoClient;
 use App\Services\State\BotState;
@@ -10,13 +11,16 @@ use App\Services\State\BotState;
 class AdmIngestor
 {
     private PositionRecorder $positions;
+    private BunkerVisitService $bunkerVisits;
 
     public function __construct(
         private AdmParser $parser,
         private LifeTracker $tracker,
         ?PositionRecorder $positions = null,
+        ?BunkerVisitService $bunkerVisits = null,
     ) {
         $this->positions = $positions ?? new PositionRecorder();
+        $this->bunkerVisits = $bunkerVisits ?? new BunkerVisitService();
     }
 
     /**
@@ -118,6 +122,10 @@ class AdmIngestor
 
             if (($pos = $this->parser->parsePosition($raw)) !== null) {
                 $this->positions->record($pos['gamertag'], $pos['x'], $pos['y'], $ts);
+            }
+
+            if (($b = $this->parser->parseBunkerEntrance($raw)) !== null) {
+                $this->bunkerVisits->record($b['gamertag'], $ts);
             }
         }
 
