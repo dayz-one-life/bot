@@ -17,15 +17,17 @@ function lbBoards(): array
         'kills' => [['gamertag' => 'Bob', 'kills' => 3], ['gamertag' => 'Alice', 'kills' => 1]],
         'streak' => [['gamertag' => 'Bob', 'streak' => 2]],
         'distance' => [['killer' => 'Bob', 'victim' => 'Carol', 'weapon' => 'M24', 'distance' => 412.7]],
+        'bunker_visits' => [['gamertag' => 'Alice', 'bunker_visits' => 2], ['gamertag' => 'Bob', 'bunker_visits' => 1]],
+        'quickest_bunker' => [['gamertag' => 'Bob', 'seconds' => 120]],
     ];
 }
 
-it('builds a five-field payload with a title and description', function () {
+it('builds a seven-field payload with a title and description', function () {
     $payload = $this->composer->compose(lbBoards());
 
     expect($payload['title'])->toContain('Leaderboard');
     expect($payload['description'])->toBeString()->not->toBe('');
-    expect($payload['fields'])->toHaveCount(5);
+    expect($payload['fields'])->toHaveCount(7);
 });
 
 it('formats durations and never @-mentions (plain backticked gamertags)', function () {
@@ -56,4 +58,20 @@ it('renders an empty board as a placeholder', function () {
 
     // Field 3 = streak
     expect($fields[3]['value'])->toBe('*No entries yet*');
+});
+
+it('renders the two bunker boards with correct nouns and duration', function () {
+    $fields = $this->composer->compose(lbBoards())['fields'];
+    $names = array_column($fields, 'name');
+
+    expect($names)->toContain('🚪 Most Bunker Visits')
+        ->and($names)->toContain('⏱️ Quickest New Life → Bunker');
+
+    $visitsField = collect($fields)->firstWhere('name', '🚪 Most Bunker Visits');
+    expect($visitsField['value'])->toContain('`Alice` — 2 visits')
+        ->and($visitsField['value'])->toContain('`Bob` — 1 visit'); // singular
+
+    $quickField = collect($fields)->firstWhere('name', '⏱️ Quickest New Life → Bunker');
+    expect($quickField['value'])->toContain('`Bob`')
+        ->and($quickField['value'])->toContain('2m'); // duration rendered via SessionDuration
 });

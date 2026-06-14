@@ -40,7 +40,7 @@ class LeaderboardService extends Service
     }
 
     /**
-     * Build the payload from the five boards and hand it to the notifier.
+     * Build the payload from the seven boards and hand it to the notifier.
      * Split out so tests can inject a NullLeaderboardNotifier.
      */
     public function compose(LeaderboardNotifier $notifier): void
@@ -54,6 +54,8 @@ class LeaderboardService extends Service
             'kills' => $stats->mostKills($top),
             'streak' => $stats->longestKillStreaks($top),
             'distance' => $stats->longestKills($top),
+            'bunker_visits' => $stats->mostBunkerVisits($top),
+            'quickest_bunker' => $stats->quickestNewLifeToBunker($top),
         ]);
 
         $notifier->publish($payload);

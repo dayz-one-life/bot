@@ -189,6 +189,67 @@ class LeaderboardStatsService
     }
 
     /**
+     * Total counted bunker visits per player, desc. Tie-break: earliest first visit.
+     *
+     * @return array<int, array{gamertag:string, bunker_visits:int}>
+     */
+    public function mostBunkerVisits(int $limit): array
+    {
+        return DB::table('bunker_visits')
+            ->join('players', 'players.id', '=', 'bunker_visits.player_id')
+            ->groupBy('bunker_visits.player_id', 'players.gamertag')
+            ->orderByDesc('visits')
+            ->orderByRaw('MIN(bunker_visits.visited_at) ASC')
+            ->limit($limit)
+            ->get([
+                'players.gamertag as gamertag',
+                DB::raw('COUNT(*) as visits'),
+            ])
+            ->map(fn ($r) => ['gamertag' => $r->gamertag, 'bunker_visits' => (int) $r->visits])
+            ->all();
+    }
+
+    /**
+     * Each player's fastest life-start -> first-bunker-visit time, ascending.
+     * One row per player (their best life). Lives without a visit, and visits with a
+     * null life_id, are excluded. Tie-break: earliest life start.
+     *
+     * @return array<int, array{gamertag:string, seconds:int}>
+     */
+    public function quickestNewLifeToBunker(int $limit): array
+    {
+        $rows = DB::table('bunker_visits')
+            ->join('lives', 'lives.id', '=', 'bunker_visits.life_id')
+            ->join('players', 'players.id', '=', 'lives.player_id')
+            ->groupBy('bunker_visits.life_id', 'players.gamertag', 'lives.started_at')
+            ->get([
+                'players.gamertag as gamertag',
+                'lives.started_at as started_at',
+                DB::raw('MIN(bunker_visits.visited_at) as first_visit'),
+            ]);
+
+        $best = []; // gamertag => ['gamertag','seconds','started_at']
+        foreach ($rows as $r) {
+            $startTs = CarbonImmutable::parse($r->started_at)->getTimestamp();
+            $seconds = CarbonImmutable::parse($r->first_visit)->getTimestamp() - $startTs;
+            if ($seconds < 0) {
+                continue; // defensive: a visit can't precede its own life
+            }
+            if (! isset($best[$r->gamertag]) || $seconds < $best[$r->gamertag]['seconds']) {
+                $best[$r->gamertag] = ['gamertag' => $r->gamertag, 'seconds' => $seconds, 'started_at' => $startTs];
+            }
+        }
+
+        $out = array_values($best);
+        usort($out, fn ($a, $b) => $a['seconds'] <=> $b['seconds'] ?: $a['started_at'] <=> $b['started_at']);
+
+        return array_map(
+            fn ($r) => ['gamertag' => $r['gamertag'], 'seconds' => $r['seconds']],
+            array_slice($out, 0, $limit)
+        );
+    }
+
+    /**
      * Sort by seconds desc, tie-break started_at asc, strip the sort key, take $limit.
      *
      * @param  array<int, array{gamertag:string, seconds:int, started_at:int}>  $rows
