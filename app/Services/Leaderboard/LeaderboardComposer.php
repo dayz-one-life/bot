@@ -6,11 +6,11 @@ use App\Services\Connection\SessionDuration;
 use App\Services\Personality\MessagePicker;
 
 /**
- * Turns the five board row-sets into a Discord-agnostic embed payload
- * (title, description, list of {name,value} fields). Pure/testable — the
- * notifier turns this into an actual Discord Embed. Players are rendered as
- * plain backticked gamertags; the leaderboard NEVER @-mentions (high-frequency
- * edited message — an intentional exception to the "public posts mention" rule).
+ * Turns the seven board row-sets into an ordered list of Discord-agnostic board
+ * payloads ({key,title,description}) — one per leaderboard message. Pure/testable;
+ * the notifier turns each into an actual Discord Embed. Players render as plain
+ * backticked gamertags; the leaderboard NEVER @-mentions (high-frequency edited
+ * messages — an intentional exception to the "public posts mention" rule).
  */
 class LeaderboardComposer
 {
@@ -23,22 +23,30 @@ class LeaderboardComposer
 
     /**
      * @param  array{alive:array, all_time:array, kills:array, streak:array, distance:array, bunker_visits:array, quickest_bunker:array}  $boards
-     * @return array{title:string, description:string, fields:array<int, array{name:string, value:string}>}
+     * @return array<int, array{key:string, title:string, description:string}>  Ordered, top→bottom.
      */
-    public function compose(array $boards): array
+    public function composeBoards(array $boards): array
     {
         return [
-            'title' => '🏆 One Life Leaderboards',
-            'description' => $this->picker->pick('leaderboard.intro', [], 'The standings, fresh off the server.'),
-            'fields' => [
-                ['name' => '🫀 Longest Life · Still Alive', 'value' => $this->durationRows($boards['alive'])],
-                ['name' => '⏳ Longest Life · All Time', 'value' => $this->durationRows($boards['all_time'])],
-                ['name' => '🔫 Most Kills', 'value' => $this->countRows($boards['kills'], 'kills')],
-                ['name' => '🩸 Longest Kill Streak', 'value' => $this->countRows($boards['streak'], 'streak')],
-                ['name' => '🎯 Longest Kills', 'value' => $this->distanceRows($boards['distance'])],
-                ['name' => '🚪 Most Bunker Visits', 'value' => $this->countRows($boards['bunker_visits'], 'bunker_visits', 'visit', 'visits')],
-                ['name' => '⏱️ Quickest New Life → Bunker', 'value' => $this->durationRows($boards['quickest_bunker'])],
-            ],
+            $this->board('alive', '🫀 Longest Life · Still Alive', $this->durationRows($boards['alive'])),
+            $this->board('all_time', '⏳ Longest Life · All Time', $this->durationRows($boards['all_time'])),
+            $this->board('kills', '🔫 Most Kills', $this->countRows($boards['kills'], 'kills')),
+            $this->board('streak', '🩸 Longest Kill Streak', $this->countRows($boards['streak'], 'streak')),
+            $this->board('distance', '🎯 Longest Kills', $this->distanceRows($boards['distance'])),
+            $this->board('bunker_visits', '🚪 Most Bunker Visits', $this->countRows($boards['bunker_visits'], 'bunker_visits', 'visit', 'visits')),
+            $this->board('quickest_bunker', '⏱️ Quickest New Life → Bunker', $this->durationRows($boards['quickest_bunker'])),
+        ];
+    }
+
+    /** @return array{key:string, title:string, description:string} */
+    private function board(string $key, string $title, string $rows): array
+    {
+        $line = $this->picker->pick("leaderboard.{$key}", [], 'The standings, fresh off the server.');
+
+        return [
+            'key' => $key,
+            'title' => $title,
+            'description' => $line."\n\n".$rows,
         ];
     }
 

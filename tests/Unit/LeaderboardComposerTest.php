@@ -22,56 +22,54 @@ function lbBoards(): array
     ];
 }
 
-it('builds a seven-field payload with a title and description', function () {
-    $payload = $this->composer->compose(lbBoards());
+it('returns seven boards in the canonical order with key, title, description', function () {
+    $boards = $this->composer->composeBoards(lbBoards());
 
-    expect($payload['title'])->toContain('Leaderboard');
-    expect($payload['description'])->toBeString()->not->toBe('');
-    expect($payload['fields'])->toHaveCount(7);
+    expect($boards)->toHaveCount(7);
+    expect(array_column($boards, 'key'))->toBe([
+        'alive', 'all_time', 'kills', 'streak', 'distance', 'bunker_visits', 'quickest_bunker',
+    ]);
+    foreach ($boards as $b) {
+        expect($b['title'])->toBeString()->not->toBe('');
+        expect($b['description'])->toBeString()->not->toBe('');
+    }
 });
 
-it('formats durations and never @-mentions (plain backticked gamertags)', function () {
-    $fields = $this->composer->compose(lbBoards())['fields'];
+it('puts ranked rows in the description and never @-mentions', function () {
+    $alive = $this->composer->composeBoards(lbBoards())[0];
 
-    // Field 0 = alive board
-    expect($fields[0]['value'])->toContain('1. `Alice` — 1h 23m');
-    expect($fields[0]['value'])->toContain('2. `Bob` — <1m');
-    expect($fields[0]['value'])->not->toContain('<@');
+    expect($alive['title'])->toBe('🫀 Longest Life · Still Alive');
+    expect($alive['description'])->toContain('1. `Alice` — 1h 23m');
+    expect($alive['description'])->toContain('2. `Bob` — <1m');
+    expect($alive['description'])->not->toContain('<@');
 });
 
-it('formats kill counts with singular/plural and distance rows', function () {
-    $fields = $this->composer->compose(lbBoards())['fields'];
+it('formats kill counts (singular/plural) and distance rows', function () {
+    $boards = collect($this->composer->composeBoards(lbBoards()))->keyBy('key');
 
-    // Field 2 = most kills
-    expect($fields[2]['value'])->toContain('1. `Bob` — 3 kills');
-    expect($fields[2]['value'])->toContain('2. `Alice` — 1 kill');
-
-    // Field 4 = longest distance kill
-    expect($fields[4]['value'])->toContain('`Bob` (M24) — 413m → `Carol`');
+    expect($boards['kills']['description'])->toContain('1. `Bob` — 3 kills');
+    expect($boards['kills']['description'])->toContain('2. `Alice` — 1 kill');
+    expect($boards['distance']['description'])->toContain('`Bob` (M24) — 413m → `Carol`');
 });
 
-it('renders an empty board as a placeholder', function () {
-    $boards = lbBoards();
-    $boards['streak'] = [];
+it('renders an empty board as a placeholder (personality line still present)', function () {
+    $input = lbBoards();
+    $input['streak'] = [];
+    $boards = collect($this->composer->composeBoards($input))->keyBy('key');
 
-    $fields = $this->composer->compose($boards)['fields'];
-
-    // Field 3 = streak
-    expect($fields[3]['value'])->toBe('*No entries yet*');
+    expect($boards['streak']['description'])->toContain('*No entries yet*');
+    // Personality line is the first line of the leaderboard.streak pool.
+    expect($boards['streak']['description'])->toContain(config('personality.leaderboard.streak')[0]);
 });
 
 it('renders the two bunker boards with correct nouns and duration', function () {
-    $fields = $this->composer->compose(lbBoards())['fields'];
-    $names = array_column($fields, 'name');
+    $boards = collect($this->composer->composeBoards(lbBoards()))->keyBy('key');
 
-    expect($names)->toContain('🚪 Most Bunker Visits')
-        ->and($names)->toContain('⏱️ Quickest New Life → Bunker');
+    expect($boards['bunker_visits']['title'])->toBe('🚪 Most Bunker Visits');
+    expect($boards['bunker_visits']['description'])->toContain('`Alice` — 2 visits');
+    expect($boards['bunker_visits']['description'])->toContain('`Bob` — 1 visit'); // singular
 
-    $visitsField = collect($fields)->firstWhere('name', '🚪 Most Bunker Visits');
-    expect($visitsField['value'])->toContain('`Alice` — 2 visits')
-        ->and($visitsField['value'])->toContain('`Bob` — 1 visit'); // singular
-
-    $quickField = collect($fields)->firstWhere('name', '⏱️ Quickest New Life → Bunker');
-    expect($quickField['value'])->toContain('`Bob`')
-        ->and($quickField['value'])->toContain('2m'); // duration rendered via SessionDuration
+    expect($boards['quickest_bunker']['title'])->toBe('⏱️ Quickest New Life → Bunker');
+    expect($boards['quickest_bunker']['description'])->toContain('`Bob`');
+    expect($boards['quickest_bunker']['description'])->toContain('2m'); // SessionDuration
 });

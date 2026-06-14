@@ -2,11 +2,14 @@
 
 use App\Services\Leaderboard\NullLeaderboardNotifier;
 
-it('captures the published payload and never throws', function () {
+it('captures the published payloads and never throws', function () {
     $notifier = new NullLeaderboardNotifier();
-    $payload = ['title' => 't', 'description' => 'd', 'fields' => []];
+    $payloads = [
+        ['key' => 'alive', 'title' => 't1', 'description' => 'd1'],
+        ['key' => 'kills', 'title' => 't2', 'description' => 'd2'],
+    ];
 
-    $notifier->publish($payload);
+    $notifier->publish($payloads);
 
-    expect($notifier->lastPayload)->toBe($payload);
+    expect($notifier->lastPayloads)->toBe($payloads);
 });
