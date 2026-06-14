@@ -13,6 +13,7 @@ class AdmParser
     private const TIME_RE = '/^(\d{2}):(\d{2}):(\d{2})/';
     private const PLAYER_NAME_RE = '/Player "([^"]+)"/u';
     private const POSITION_RE = '/pos=<\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\s*>/u';
+    private const BUNKER_ENTRANCE_RE = '/Player "([^"]+)".*was teleported.*RestrictedAreaBunkerEntrance$/u';
 
     private const DAY_MS = 86400000;
     private const ROLLOVER_THRESHOLD_SEC = 43200; // 12h
@@ -28,6 +29,17 @@ class AdmParser
     {
         if (!preg_match(self::DISCONNECT_RE, $raw, $m)) return null;
         return ['gamertag' => $m[1], 'id' => $m[2]];
+    }
+
+    /**
+     * A bunker visit: the player was teleported into the bunker's restricted area on
+     * spawn-in. Self-labeling via the reason string — coordinate-independent. Returns
+     * the gamertag, or null for the exit line / any other line.
+     */
+    public function parseBunkerEntrance(string $raw): ?array
+    {
+        if (!preg_match(self::BUNKER_ENTRANCE_RE, $raw, $m)) return null;
+        return ['gamertag' => $m[1]];
     }
 
     /**

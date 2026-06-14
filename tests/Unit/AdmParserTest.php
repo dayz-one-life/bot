@@ -127,3 +127,19 @@ it('parses negative coordinates', function () {
     $r = $this->parser->parsePosition('10:00:00 | Player "A" (id=A=) pos=<-500.0, -200.5, 10.0>');
     expect($r)->toBe(['gamertag' => 'A', 'x' => -500.0, 'y' => -200.5]);
 });
+
+it('parses a bunker entrance teleport line', function () {
+    $line = '02:30:35 | Player "RonaldRaygun552" (id=89B90470 pos=<5154.0, 1075.1, 56.3>) was teleported from: <4767.4, 339.4, 10376.3> to: <5154.0, 56.3, 1075.1>. Reason: Spawning in Player Restricted Area: RestrictedAreaBunkerEntrance';
+    expect($this->parser->parseBunkerEntrance($line))->toBe(['gamertag' => 'RonaldRaygun552']);
+});
+
+it('ignores a bunker exit teleport line', function () {
+    $line = '03:01:32 | Player "RonaldRaygun552" (id=89B90470 pos=<4828.4, 10291.8, 339.9>) was teleported from: <5005.0, 17.7, 1086.6> to: <4828.4, 339.9, 10291.7>. Reason: Spawning in Player Restricted Area: RestrictedAreaBunkerExit';
+    expect($this->parser->parseBunkerEntrance($line))->toBeNull();
+});
+
+it('ignores connect, death and bare position lines for bunker entrance', function () {
+    expect($this->parser->parseBunkerEntrance('12:34:56 | Player "Bob" (id=XYZ pos=<100.0, 200.0, 5.0>) is connected'))->toBeNull();
+    expect($this->parser->parseBunkerEntrance('12:34:56 | Player "Bob" (DEAD) (id=XYZ pos=<1,2,3>) killed by Player "Eve" (id=ABC)'))->toBeNull();
+    expect($this->parser->parseBunkerEntrance('12:34:56 | Player "Bob" (id=XYZ pos=<100.0, 200.0, 5.0>)'))->toBeNull();
+});
