@@ -44,16 +44,11 @@ class IngestAdmService extends Service
                 new \App\Services\Ban\DiscordBanNotifier($this->discord(), env('BANS_CHANNEL_ID')),
                 dryRun: filter_var(env('BAN_DRY_RUN', false), FILTER_VALIDATE_BOOL),
             );
-            $deathFeed = new \App\Services\DeathFeed\DiscordDeathFeedNotifier(
-                $this->discord(),
-                env('BANS_CHANNEL_ID'),
-            );
             $banned = (new \App\Services\Ban\DeathBanService(
                 $bans,
                 $state,
                 (int) env('BAN_DURATION_HOURS', 12),
-                $deathFeed,
-                (int) env('DEATH_FEED_MAX_AGE_MINUTES', 10),
+                (int) config('lifecycle.ban_min_playtime_minutes', 60) * 60,
             ))->run();
             if ($banned > 0) {
                 $this->console()->info("[ingest] issued {$banned} death ban(s).");
