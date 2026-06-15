@@ -349,6 +349,24 @@ return [
         ],
     ],
 
+    'newspaper' => [
+        'editorial' => [
+            "**Another week on the coast.** :lives_lost survivors met their end, and the rest of you kept your heads down. Stay paranoid out there.",
+            "**The wasteland grinds on.** :lives_lost lives ended this week. Some heroic, most embarrassing. You know who you are.",
+            "**Editor's note:** :lives_lost dead, :playtime logged, zero lessons learned. See you next week.",
+        ],
+        'recap' => [
+            "It was a typical week: people died, people looted, people made questionable choices. The standouts have already been forgotten.",
+            "Nothing the history books will remember, but the bodies were real. :lives_lost of them.",
+            "A week of small tragedies and smaller victories. The coast remains undefeated.",
+        ],
+        'classifieds' => [
+            "**FOR SALE:** Assorted gear, slightly bloodstained. **WANTED:** A squadmate who can aim. **PERSONAL:** To whoever shot me — I'm not mad, I'm just disappointed.",
+            "**LOST:** My will to push the airfield. **FOUND:** A bush, very comfortable. **WANTED:** Directions out of the wilderness.",
+            "**FOR SALE:** One life, barely used. **PERSONAL:** Missed connection at the coast — you had a gun, I had hope.",
+        ],
+    ],
+
     'eulogy' => [
         'pvp' => [
             ['headline' => '💀 {{PLAYER}} DROPPED — {{KILLER}} DECLINES COMMENT', 'body' => "📰 *Obituary* — {{PLAYER}} met their end at the hands of {{KILLER}}. A life of promise, ended with grim efficiency. They are survived by their loot, which {{KILLER}} now owns."],

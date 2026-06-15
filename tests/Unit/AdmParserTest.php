@@ -143,3 +143,47 @@ it('ignores connect, death and bare position lines for bunker entrance', functio
     expect($this->parser->parseBunkerEntrance('12:34:56 | Player "Bob" (DEAD) (id=XYZ pos=<1,2,3>) killed by Player "Eve" (id=ABC)'))->toBeNull();
     expect($this->parser->parseBunkerEntrance('12:34:56 | Player "Bob" (id=XYZ pos=<100.0, 200.0, 5.0>)'))->toBeNull();
 });
+
+it('parses a player-vs-player hit', function () {
+    $line = '10:00:00 | Player "Victim" (id=V= pos=<100.5, 200.0, 1.0>)[HP: 50] hit by Player "Attacker" (id=A= pos=<101.0, 201.0, 1.0>) into Torso';
+    $h = $this->parser->parseHit($line);
+    expect($h)->toMatchArray([
+        'victim' => 'Victim',
+        'victim_hp' => 50,
+        'attacker_gamertag' => 'Attacker',
+        'attacker_type' => 'player',
+        'attacker_label' => null,
+        'body_part' => 'Torso',
+    ]);
+    expect($h['victim_x'])->toBe(100.5);
+    expect($h['victim_y'])->toBe(200.0);
+});
+
+it('parses an infected hit and humanizes the source', function () {
+    $line = '10:00:00 | Player "Victim" (id=V= pos=<1.0, 2.0, 3.0>)[HP: 30] hit by ZmbM_JoggerSkinny_Red into Leg';
+    $h = $this->parser->parseHit($line);
+    expect($h['attacker_type'])->toBe('infected');
+    expect($h['attacker_gamertag'])->toBeNull();
+    expect($h['attacker_label'])->toBe('an infected jogger');
+    expect($h['body_part'])->toBe('Leg');
+});
+
+it('parses an animal hit', function () {
+    $line = '10:00:00 | Player "Victim" (id=V=)[HP: 10] hit by Animal_UrsusArctos into Torso';
+    $h = $this->parser->parseHit($line);
+    expect($h['attacker_type'])->toBe('animal');
+    expect($h['attacker_label'])->toBe('a bear');
+    expect($h['victim_x'])->toBeNull();
+});
+
+it('parses an environmental hit', function () {
+    $line = '10:00:00 | Player "Victim" (id=V=)[HP: 80] hit by FallDamage';
+    $h = $this->parser->parseHit($line);
+    expect($h['attacker_type'])->toBe('environment');
+    expect($h['attacker_gamertag'])->toBeNull();
+    expect($h['body_part'])->toBeNull();
+});
+
+it('returns null for a non-hit line', function () {
+    expect($this->parser->parseHit('10:00:00 | Player "A" (id=A=) is connected'))->toBeNull();
+});
