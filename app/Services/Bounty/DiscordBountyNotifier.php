@@ -4,6 +4,7 @@ namespace App\Services\Bounty;
 
 use App\Models\Bounty;
 use App\Models\Player;
+use App\Services\Llm\FlavorGenerator;
 use App\Services\Lookup\PlayerMention;
 use App\Services\Personality\MessagePicker;
 use Discord\Discord;
@@ -12,17 +13,24 @@ class DiscordBountyNotifier implements BountyNotifier
 {
     private MessagePicker $picker;
 
-    public function __construct(private ?Discord $discord, private ?string $channelId, ?MessagePicker $picker = null)
-    {
+    private FlavorGenerator $flavor;
+
+    public function __construct(
+        private ?Discord $discord,
+        private ?string $channelId,
+        ?MessagePicker $picker = null,
+        ?FlavorGenerator $flavor = null,
+    ) {
         $this->picker = $picker ?? new MessagePicker();
+        $this->flavor = $flavor ?? FlavorGenerator::fromConfig();
     }
 
     public function placed(Bounty $bounty, Player $target): void
     {
         $targetDisplay = (new PlayerMention())->forPlayer($target);
-        $this->toChannel($this->picker->pick(
+        $this->toChannel($this->flavor->line(
             'bounty.placed',
-            [':target' => $targetDisplay],
+            ['target' => $targetDisplay],
             "🎯 **Bounty placed** on {$targetDisplay} — kill them for an unban token!"
         ));
         if ($target->discord_user_id) {
@@ -35,9 +43,9 @@ class DiscordBountyNotifier implements BountyNotifier
     public function moved(Bounty $bounty, Player $target): void
     {
         $targetDisplay = (new PlayerMention())->forPlayer($target);
-        $this->toChannel($this->picker->pick(
+        $this->toChannel($this->flavor->line(
             'bounty.moved',
-            [':target' => $targetDisplay],
+            ['target' => $targetDisplay],
             "🎯 **Bounty moved** — {$targetDisplay} is now the longest-surviving target."
         ));
         if ($target->discord_user_id) {
@@ -52,9 +60,9 @@ class DiscordBountyNotifier implements BountyNotifier
         $mention = new PlayerMention();
         $killerDisplay = $mention->forPlayer($killer);
         $targetDisplay = $mention->forPlayer($target);
-        $this->toChannel($this->picker->pick(
+        $this->toChannel($this->flavor->line(
             'bounty.claimed',
-            [':killer' => $killerDisplay, ':target' => $targetDisplay, ':tokens' => $tokens],
+            ['killer' => $killerDisplay, 'target' => $targetDisplay, 'tokens' => $tokens],
             "💀 **Bounty claimed!** {$killerDisplay} killed {$targetDisplay} and earned {$tokens} unban token(s)."
         ));
         if ($killer->discord_user_id) {
@@ -71,9 +79,9 @@ class DiscordBountyNotifier implements BountyNotifier
     {
         // Neutral wording — never reveals whether a reward was paid (associate-farm guard).
         $targetDisplay = (new PlayerMention())->forPlayer($target);
-        $this->toChannel($this->picker->pick(
+        $this->toChannel($this->flavor->line(
             'bounty.ended',
-            [':target' => $targetDisplay],
+            ['target' => $targetDisplay],
             "🏳️ **Bounty ended** — the bounty on {$targetDisplay} is no longer active."
         ));
     }

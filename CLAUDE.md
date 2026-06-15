@@ -123,7 +123,11 @@ Feature test, and keep the command/Service a wiring shim.
   side effects, so they fire even in dry-run mode. Position samples are harvested live during
   ingest AND can be backfilled across ADM history via `adm:backfill-positions`; retention is
   governed by `BOUNTY_POSITION_RETENTION_DAYS` (0 = keep forever), separate from the detector's
-  `assoc_window_days` scoring window.
+  `assoc_window_days` scoring window. The four public bounty channel posts
+  (placed/moved/claimed/ended) are LLM-generated via `app/Services/Llm/FlavorGenerator`
+  (OpenRouter, reusing the `OPENROUTER_*` / `config/llm.php` block), with the `bounty.*`
+  personality pools as the canned fallback; DMs stay canned. The `bounty.ended` neutrality rule
+  (no payout hints) is enforced in BOTH the generator prompt and the pool.
 - **Gamertag rendering** — `app/Services/Lookup/PlayerMention` turns a linked gamertag into a
   Discord mention `<@id>` (else backticked text). **Only PUBLIC channel posts mention** — the ban /
   bounty channel announcements via the notifiers. **Ephemeral slash replies and DMs keep plain
@@ -161,8 +165,13 @@ Feature test, and keep the command/Service a wiring shim.
   Periodic `LifecycleAnnounceService` (60s, `config/lifecycle.php`). Births → `BIRTHS_CHANNEL_ID`,
   eulogies → `EULOGY_CHANNEL_ID`. **Births are intentionally delayed ~grace** (the cost of de-duping
   rerolls). **Not gated by `BAN_DRY_RUN`** (channel posts/DB markers are independent of real Nitrado
-  bans). `DiscordBanNotifier` still suppresses the `ban.death` channel post and sends the
-  `ban.dm.death` DM. Weapon/distance persisted on `lives` (`death_weapon`/`death_distance`).
+  bans). Ban CHANNEL posts (death/manual/extended/unbanned) are LLM-generated via
+  `app/Services/Llm/FlavorGenerator` with the `ban.*` pools as fallback (DMs stay canned).
+  Death-bans are **no longer channel-suppressed** — the `postsToChannel()` guard was removed, so a
+  death-ban posts a consequence-framed notice to `BANS_CHANNEL_ID` (in ADDITION to the separate
+  eulogy in `EULOGY_CHANNEL_ID`); a death with ≥`BAN_MIN_PLAYTIME_MINUTES` playtime thus produces
+  two posts. `DiscordBanNotifier` still sends the `ban.dm.death` DM. Weapon/distance persisted on
+  `lives` (`death_weapon`/`death_distance`).
 - **Online-players roster** — `app/Services/Online/`: `OnlineRosterQuery` (read-only snapshot of open
   `game_sessions` → rows `{gamertag, session_seconds, life_seconds}`, longest session first),
   `OnlineRosterComposer` (pure → `{title, description}` embed payload; backticked gamertags,
