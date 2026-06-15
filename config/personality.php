@@ -101,11 +101,11 @@ return [
 
     'ban' => [
 
-        // NOTE: this 'ban.death' pool is NO LONGER used for channel posts — the lifecycle
-        // eulogy feed (LifecycleAnnouncer, via eulogy.* pools) owns the public death
-        // announcement (DiscordBanNotifier::postsToChannel suppresses 'ban.death'). The
-        // banned player still gets the separate 'ban.dm.death' DM below. Retained as a
-        // reference/fallback; do not re-wire the ban notifier to use it.
+        // 'ban.death' is the canned FALLBACK for the death-ban channel post (FlavorGenerator
+        // generates the live copy via OpenRouter). The death-ban post goes to BANS_CHANNEL_ID
+        // and is framed as the CONSEQUENCE (benched until X) — distinct from the eulogy, which
+        // tells the death story separately in EULOGY_CHANNEL_ID. The banned player also gets the
+        // 'ban.dm.death' DM below.
         'death' => [
             '⚰️ :who had ONE life and yeeted it into the void. Benched until :expires.',
             '⚰️ :who discovered the "one" in one-life the hard way. Back on :expires.',
