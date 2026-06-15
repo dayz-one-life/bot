@@ -153,6 +153,75 @@ class AdmParser
     }
 
     /**
+     * Parse an ADM "hit by" damage line into a structured hit event. Player attackers yield
+     * attacker_type='player' + attacker_gamertag; infected/animal/other sources yield a humanized
+     * attacker_label and a classified attacker_type, with attacker_gamertag null. Coordinates are
+     * the VICTIM's (used only to derive an aggregate region downstream — never exposed raw).
+     *
+     * @return array{victim:string,victim_hp:?int,victim_x:?float,victim_y:?float,body_part:?string,attacker_gamertag:?string,attacker_type:string,attacker_label:?string}|null
+     */
+    public function parseHit(string $raw): ?array
+    {
+        $pos = strpos($raw, 'hit by');
+        if ($pos === false) return null;
+        if (!preg_match(self::PLAYER_NAME_RE, $raw, $vm)) return null;
+
+        $before = substr($raw, 0, $pos);
+        $after = substr($raw, $pos + strlen('hit by'));
+
+        $hp = null;
+        if (preg_match('/\[HP:\s*(-?\d+)\]/u', $raw, $hm)) $hp = (int) $hm[1];
+
+        $vx = $vy = null;
+        if (preg_match(self::POSITION_RE, $before, $pm)) {
+            $vx = (float) $pm[1];
+            $vy = (float) $pm[2];
+        }
+
+        $bodyPart = null;
+        if (preg_match('/into ([A-Za-z]+)\s*$/u', trim($after), $bm)) $bodyPart = $bm[1];
+
+        // Player attacker?
+        if (preg_match('/^\s*Player "([^"]+)"/u', $after, $am)) {
+            return [
+                'victim' => $vm[1], 'victim_hp' => $hp, 'victim_x' => $vx, 'victim_y' => $vy,
+                'body_part' => $bodyPart,
+                'attacker_gamertag' => $am[1], 'attacker_type' => 'player', 'attacker_label' => null,
+            ];
+        }
+
+        // Non-player source: strip the trailing "into <BodyPart>" and any "(...)" detail.
+        $src = trim($after);
+        $src = preg_replace('/\s+into\s+[A-Za-z]+\s*$/u', '', $src);
+        $src = trim(preg_replace('/\(.*$/', '', $src));
+
+        $type = match (true) {
+            str_contains($src, 'Zmb') => 'infected',
+            str_starts_with($src, 'Animal_') => 'animal',
+            default => 'environment',
+        };
+        $label = $type === 'environment'
+            ? $this->humanizeEnvironment($src)
+            : DayzNameHumanizer::text($src);
+
+        return [
+            'victim' => $vm[1], 'victim_hp' => $hp, 'victim_x' => $vx, 'victim_y' => $vy,
+            'body_part' => $bodyPart,
+            'attacker_gamertag' => null, 'attacker_type' => $type, 'attacker_label' => $label,
+        ];
+    }
+
+    private function humanizeEnvironment(string $src): string
+    {
+        return match (true) {
+            stripos($src, 'Fall') !== false => 'a fall',
+            stripos($src, 'Explosion') !== false => 'an explosion',
+            $src === '' => 'the environment',
+            default => $src,
+        };
+    }
+
+    /**
      * Server-local log clock -> UTC offset in ms (add to a log ts to get UTC).
      * @param array<int,array{timestamp:\DateTimeImmutable,modifiedAt:?int}> $files
      */

@@ -129,3 +129,17 @@ it('captures a death-window log onto the life', function () {
     expect($life->death_log)->toContain('killed by Player "Shooter"');
     expect($life->death_log)->not->toContain('Shooter" (id=S=) is connected'); // only victim-mentioning lines
 });
+
+it('records hit events during ingest', function () {
+    $content = "AdminLog started on 2026-06-10 at 10:00:00\n"
+        ."10:00:01 | Player \"Hero\" (id=H=) is connected\n"
+        ."10:01:00 | Player \"Hero\" (id=H= pos=<6700.0, 2500.0, 1.0>)[HP: 60] hit by Player \"Villain\" (id=Vv=) into Torso\n"
+        ."10:02:00 | Player \"Hero\" (id=H= pos=<6700.0, 2500.0, 1.0>)[HP: 30] hit by ZmbM_JoggerSkinny_Red into Leg\n";
+
+    $ingestor = new App\Services\Adm\AdmIngestor(new App\Services\Adm\AdmParser(), new App\Services\Life\LifeTracker());
+    $ingestor->processFile($content, 0, new DateTimeImmutable('2026-06-10'), 0);
+
+    expect(App\Models\HitEvent::count())->toBe(2);
+    expect(App\Models\HitEvent::where('attacker_type', 'player')->first()->attacker_gamertag)->toBe('Villain');
+    expect(App\Models\HitEvent::where('attacker_type', 'infected')->first()->attacker_label)->toBe('an infected jogger');
+});
