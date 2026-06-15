@@ -12,7 +12,8 @@ polls a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs, reconstructs each p
 **unban-token economy** (link a gamertag to earn/spend tokens; monthly + referral grants).
 
 Status: Plans 1–4, the bounty / associate-detection feature, the online-players roster,
-bunker-visit tracking, **and** the births/eulogies + playtime-gated-ban feature are implemented and
+bunker-visit tracking, the births/eulogies + playtime-gated-ban feature, **and** the weekly
+newspaper (The One Life Tribune, with non-fatal hit/infected-attack capture) are implemented and
 tested. The bounty token economy is **live** (it is not gated by `BAN_DRY_RUN`). The online roster
 is **live** (channel id configured; a single message refreshed in place every few minutes). Bunker
 visits are detected from the ADM `RestrictedAreaBunkerEntrance` teleport line and surfaced on two
@@ -20,8 +21,10 @@ leaderboard boards (DB-only, not gated by `BAN_DRY_RUN`). Bans now require **≥
 (`BAN_MIN_PLAYTIME_MINUTES`); a new **births/eulogies** subsystem (LLM via OpenRouter, with a canned
 fallback) replaces the old death feed — DB-only + channel posts, not gated by `BAN_DRY_RUN`, and
 falls back to canned copy until `OPENROUTER_API_KEY` and the `BIRTHS_CHANNEL_ID` / `EULOGY_CHANNEL_ID`
-channels are set. The one remaining real-world step is arming live **banning** (the `BAN_DRY_RUN`
-cutover — see README).
+channels are set. The weekly **newspaper** (Fri 22:00 UTC) is DB-read + a channel post, also not
+gated by `BAN_DRY_RUN`, and stays dark until `NEWSPAPER_CHANNEL_ID` is set (LLM prose falls back to
+canned copy without `OPENROUTER_API_KEY`). The one remaining real-world step is arming live
+**banning** (the `BAN_DRY_RUN` cutover — see README).
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 
@@ -59,6 +62,8 @@ php laracord                          # run the bot (needs DISCORD_TOKEN; starts
 php laracord adm:verify --ticks=500 --budget=50   # backfill + life/playtime/death report (no bans)
 php laracord adm:backfill-positions --since-days=14   # backfill position samples (no bans; --keep to append)
 php laracord adm:backfill-bunker-visits --since-days=14   # backfill bunker visits from ADM history (idempotent; no bans)
+php laracord adm:backfill-hits --since-days=14   # backfill hit events from ADM history (no bans)
+php laracord news:publish --dry-run   # preview the current week's Tribune issue in the terminal (never posts)
 ./vendor/bin/pest                     # run the test suite
 ./vendor/bin/pest tests/Feature/Foo.php   # one file
 ```
@@ -74,7 +79,11 @@ plus the lifecycle/LLM block: `LIFECYCLE_ENABLED=true`, `LIFE_GRACE_MINUTES=5`,
 `BAN_MIN_PLAYTIME_MINUTES=60`, `LIFECYCLE_MAX_AGE_MINUTES=30`, `BIRTHS_CHANNEL_ID`,
 `EULOGY_CHANNEL_ID`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=anthropic/claude-haiku-4.5`,
 `OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_SECONDS=20` (mirrored in `config/lifecycle.php` +
-`config/llm.php`). The retired `DEATH_FEED_MAX_AGE_MINUTES` key is no longer used.
+`config/llm.php`), plus the weekly-newspaper block: `NEWSPAPER_ENABLED=true`, `NEWSPAPER_CHANNEL_ID`,
+`NEWSPAPER_PUBLISH_DOW=5` (ISO Mon=1..Sun=7), `NEWSPAPER_PUBLISH_HOUR_UTC=22` (Fri 22:00 UTC = 6pm
+UTC-4) (mirrored in `config/newspaper.php`), plus `HIT_TRACKING_ENABLED=true` (`config/hits.php`;
+reuses the same `OPENROUTER_*` block as the lifecycle feature). The retired
+`DEATH_FEED_MAX_AGE_MINUTES` key is no longer used.
 `.env` is git-ignored — never commit secrets.
 
 ## Architecture
@@ -189,6 +198,27 @@ Feature test, and keep the command/Service a wiring shim.
   boards read it (see above). Backfill historical visits with `adm:backfill-bunker-visits` (idempotent
   via the cooldown). DB-only; **not gated by `BAN_DRY_RUN`**. `config/bunker.php` defaults pinned in
   `phpunit.xml`. When `BUNKER_TRACKING_ENABLED=false`, `record()` is a no-op.
+- **Hit capture** — `app/Services/Hit/HitEventService.php` + `config/hits.php`. `AdmParser::parseHit`
+  parses ADM `... hit by ...` damage lines (player / infected / animal / environment, with the
+  non-player source humanized via `DayzNameHumanizer`); `AdmIngestor` records each into the
+  `hit_events` table (victim linked by gamertag when known — a hit alone never creates a player row;
+  victim coords stored for aggregate region trends only). Backfill with `adm:backfill-hits`. DB-only;
+  **not gated by `BAN_DRY_RUN`**; no-op when `HIT_TRACKING_ENABLED=false`. Powers the newspaper's
+  infected-attack trends.
+- **Weekly newspaper (The One Life Tribune)** — `app/Services/Newspaper/`: `WeeklyFactsBuilder`
+  (location-SAFE 7-day aggregate — **never** a coordinate or a `(player, place)` pair; locations
+  surface ONLY as anonymized `region => count` trends via `app/Services/Geo/ChernarusRegions`),
+  `NewspaperGenerator` (ONE OpenRouter call → editorial/recap/classifieds split on `## …` delimiters,
+  per-section `personality.newspaper.*` canned fallback; same anti-fabrication + location-policy system
+  prompt as the eulogy generator), `NewspaperComposer` (pure → masthead + 4 section embeds incl. a
+  pure-data "Week in Numbers" box, plain backticked gamertags, **never @-mentions**),
+  `NewspaperNotifier` + `Discord`/`Null` (one multi-embed message, immutable back issues — no
+  edit-in-place). Periodic `App\Services\NewspaperService` (hourly tick; publishes Fri 22:00 UTC,
+  idempotent per ISO week via `bot_state.last_newspaper_week` + `newspaper_issue_count`, gated by
+  `go_live_at`). `php laracord news:publish [--dry-run]` is a terminal **preview/renderer only** — a
+  standalone artisan command has no live Discord gateway, so it never posts or stamps state; live
+  posting is owned by the periodic service. Not gated by `BAN_DRY_RUN`. Reuses the `OPENROUTER_*` /
+  `config/llm.php` block; defaults pinned in `phpunit.xml`.
 - **Nickname on link** — `/link` (invoker) and `/adminlink` (target user) set the member's server
   nickname to their gamertag, best-effort via `app/SlashCommands/Concerns/RenamesToGamertag`
   (swallows failures; needs the bot to have Manage Nicknames and a role above the target — and it

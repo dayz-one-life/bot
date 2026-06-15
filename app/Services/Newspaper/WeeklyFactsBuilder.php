@@ -38,6 +38,8 @@ class WeeklyFactsBuilder
     {
         $lostThis = Life::whereNotNull('ended_at')->whereBetween('ended_at', [$start, $end])->count();
         $lostPrev = Life::whereNotNull('ended_at')->whereBetween('ended_at', [$prevStart, $start])->count();
+        // Playtime is summed over lives that STARTED in the window (not ended_at like the death
+        // counts) — an editorial "hours played this week" figure, not an actuarial per-window split.
         $playtime = (int) Life::whereBetween('started_at', [$start, $end])->sum('playtime_seconds');
         $infected = HitEvent::where('attacker_type', 'infected')->whereBetween('occurred_at', [$start, $end])->count();
         $infectedPrev = HitEvent::where('attacker_type', 'infected')->whereBetween('occurred_at', [$prevStart, $start])->count();
@@ -73,6 +75,7 @@ class WeeklyFactsBuilder
             ->join('players', 'players.id', '=', 'lives.player_id')
             ->where('lives.death_cause', 'pvp')
             ->whereNotNull('lives.death_distance')
+            ->whereNotNull('lives.death_by_gamertag') // explicit (the whereColumn below also excludes nulls via SQL NULL semantics, but spell it out)
             ->whereColumn('lives.death_by_gamertag', '!=', 'players.gamertag')
             ->whereBetween('lives.ended_at', [$start, $end])
             ->orderByDesc('lives.death_distance')
@@ -104,6 +107,8 @@ class WeeklyFactsBuilder
 
     private function mostTravelled(CarbonImmutable $start, CarbonImmutable $end): ?array
     {
+        // NOTE: loads the week's position samples into memory and walks them in PHP. Fine at current
+        // sampling volume; if player_positions grows large, switch to a chunked/windowed SQL aggregation.
         $rows = DB::table('player_positions')
             ->join('players', 'players.id', '=', 'player_positions.player_id')
             ->whereBetween('recorded_at', [$start, $end])

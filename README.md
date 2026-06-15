@@ -51,6 +51,12 @@ Configure `.env`:
 | `LEADERBOARD_ENABLED` | Master toggle, default `true` |
 | `BUNKER_TRACKING_ENABLED` | Master toggle for bunker-visit tracking, default `true` |
 | `BUNKER_VISIT_COOLDOWN_MINUTES` | De-dup window for repeat bunker entries, default `60` |
+| `HIT_TRACKING_ENABLED` | Master toggle for non-fatal hit/infected-attack capture, default `true` |
+| `NEWSPAPER_CHANNEL_ID` | Channel for the weekly newspaper (The One Life Tribune); unset = feature off |
+| `NEWSPAPER_ENABLED` | Master toggle, default `true` |
+| `NEWSPAPER_PUBLISH_DOW` | Publish day, ISO Mon=1..Sun=7, default `5` (Friday) |
+| `NEWSPAPER_PUBLISH_HOUR_UTC` | Publish hour in UTC, default `22` (= 6pm UTC-4) |
+| `OPENROUTER_API_KEY` | Optional — enables LLM-written newspaper prose (and births/eulogies); without it, copy falls back to canned pools |
 
 ## Verify ingestion against real data (the Plan 1 milestone)
 
@@ -267,6 +273,38 @@ php laracord adm:backfill-bunker-visits --since-days=14   # limit scope
 
 The backfill is idempotent (the cooldown swallows re-derived duplicates) and never bans or changes
 lives. DB-only; not gated by `BAN_DRY_RUN`. Set `BUNKER_TRACKING_ENABLED=false` to disable detection.
+
+## The One Life Tribune (weekly newspaper)
+
+When `NEWSPAPER_CHANNEL_ID` is set, the bot publishes a weekly in-character newspaper every Friday
+at `NEWSPAPER_PUBLISH_HOUR_UTC` (default 22:00 UTC = 6pm UTC-4), covering the trailing 7 days. Each
+issue is one Discord message with five embeds: a masthead, an **Editorial**, a pure-data **Week in
+Numbers** box (with week-over-week deltas), a **Recap**, and fake **Classifieds**. Back issues stay
+in the channel as an archive — issues are immutable posts, never edited in place.
+
+The three prose sections are written by an LLM via OpenRouter (set `OPENROUTER_API_KEY`); without a
+key, or on any API error, each section falls back to canned copy so an issue still publishes. The
+"Week in Numbers" box is always pure data. Gamertags are plain backticked text — **never
+@-mentions**.
+
+**Privacy:** the paper may reference a town only as an aggregate trend (e.g. "infected attacks
+around Cherno are up") — it **never** ties a named player to a location, never prints coordinates,
+and never mentions player bases. Per-player stats carry distances (e.g. a 412 m kill, 14 km
+travelled) but no place.
+
+This is powered by non-fatal **hit capture** (`HIT_TRACKING_ENABLED`, default on): the bot records
+ADM `hit by` damage events (player, infected, animal, environment) into `hit_events`. Backfill
+history with `php laracord adm:backfill-hits [--since-days=N]`.
+
+Preview the current week's issue in your terminal (never posts, never records state — a standalone
+command has no live Discord connection; the running bot does the actual posting):
+
+```bash
+php laracord news:publish --dry-run
+```
+
+Set `NEWSPAPER_ENABLED=false` or leave `NEWSPAPER_CHANNEL_ID` unset to disable. Not gated by
+`BAN_DRY_RUN` (read-only DB queries + a channel post).
 
 ## Tests
 
