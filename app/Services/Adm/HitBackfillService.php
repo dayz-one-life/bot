@@ -8,8 +8,9 @@ use Carbon\CarbonImmutable;
 
 /**
  * Replays ADM history through HitEventService to capture past hit events.
- * Reconstructs per-line UTC timestamps exactly as AdmIngestor. Idempotent on re-run
- * provided the caller handles deduplication. Does NOT touch lives/sessions.
+ * Reconstructs per-line UTC timestamps exactly as AdmIngestor. Idempotent: HitEventService::record
+ * skips a hit identical to one already stored, so re-running this backfill — or running it over a
+ * window live ingest already covered — does NOT duplicate hits. Does NOT touch lives/sessions.
  */
 class HitBackfillService
 {

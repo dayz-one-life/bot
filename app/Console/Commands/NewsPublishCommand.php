@@ -22,6 +22,10 @@ class NewsPublishCommand extends Command
             $now = CarbonImmutable::now();
             $state = new BotState();
 
+            if ($this->option('force')) {
+                $this->warn('--force has no effect: a standalone command has no live Discord gateway. This always previews; the running bot does the actual weekly posting.');
+            }
+
             $facts = (new WeeklyFactsBuilder())->build($now);
             $prose = (new NewspaperGenerator(OpenRouterClient::fromConfig()))->generate($facts);
             $issue = $state->getInt('newspaper_issue_count', 0) + 1;

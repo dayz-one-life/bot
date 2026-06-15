@@ -294,7 +294,8 @@ travelled) but no place.
 
 This is powered by non-fatal **hit capture** (`HIT_TRACKING_ENABLED`, default on): the bot records
 ADM `hit by` damage events (player, infected, animal, environment) into `hit_events`. Backfill
-history with `php laracord adm:backfill-hits [--since-days=N]`.
+history with `php laracord adm:backfill-hits [--since-days=N]` — idempotent, so re-running it (or
+running it over a window live ingest already covered) won't double the counts.
 
 Preview the current week's issue in your terminal (never posts, never records state — a standalone
 command has no live Discord connection; the running bot does the actual posting):
