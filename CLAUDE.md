@@ -23,8 +23,10 @@ fallback) replaces the old death feed — DB-only + channel posts, not gated by 
 falls back to canned copy until `OPENROUTER_API_KEY` and the `BIRTHS_CHANNEL_ID` / `EULOGY_CHANNEL_ID`
 channels are set. The weekly **newspaper** (Fri 22:00 UTC) is DB-read + a channel post, also not
 gated by `BAN_DRY_RUN`, and stays dark until `NEWSPAPER_CHANNEL_ID` is set (LLM prose falls back to
-canned copy without `OPENROUTER_API_KEY`). The one remaining real-world step is arming live
-**banning** (the `BAN_DRY_RUN` cutover — see README).
+canned copy without `OPENROUTER_API_KEY`). **Live banning is armed on production** — the
+`BAN_DRY_RUN` cutover is done (`BAN_DRY_RUN=false`), so real deaths now add the gamertag to the
+Nitrado ban list and post to `BANS_CHANNEL_ID`; `BAN_DRY_RUN=true` remains the safe lever for
+local/dev runs.
 
 ## Stack & environment facts (non-obvious — don't relearn the hard way)
 

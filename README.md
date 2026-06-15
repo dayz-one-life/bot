@@ -6,13 +6,13 @@ It ingests a Nitrado-hosted Xbox DayZ server's `.ADM` admin logs and reconstruct
 player's **lives**, **play sessions**, and **playtime** from connect / disconnect / death /
 server-reboot events.
 
-> **Status — core + bounty + online roster live; deployed.** ADM ingestion +
+> **Status — fully live in production; banning armed.** ADM ingestion +
 > life/playtime tracking (Plan 1), the **banning layer** (Plan 2), the **linking + unban-token
 > economy** (Plan 3), and the **read views + admin commands** (Plan 4) are implemented and verified,
 > as are the **bounty / associate-detection** feature and the **online-players roster** channel.
-> The bot runs as the systemd service `one-life-bot`. The only remaining real-world step is arming
-> live banning (the `BAN_DRY_RUN` ops toggle below). See `docs/superpowers/specs/` and
-> `docs/superpowers/plans/` for the design and roadmap.
+> The bot runs as the systemd service `one-life-bot`, and **live banning is on** (`BAN_DRY_RUN=false`):
+> a real death now bans the gamertag on Nitrado and posts to the bans channel. See
+> `docs/superpowers/specs/` and `docs/superpowers/plans/` for the design and roadmap.
 
 ## Requirements
 
@@ -86,27 +86,31 @@ This boots the Discord connection and starts the periodic services: **`IngestAdm
 (runs `AdmIngestor::tick()` + the death-ban pass every 60s) and **`BanExpiryService`** (lifts
 expired bans and reconciles the Nitrado ban list every 60s). Requires a valid `DISCORD_TOKEN`.
 
-## Enabling banning (safe go-live cutover)
+## Banning (live)
 
-Banning only ever applies to deaths that occur **after** the bot first catches up to live
-(`go_live_at`); historical deaths in the backlog are never retro-banned. To turn it on safely:
+**Live banning is on in production (`BAN_DRY_RUN=false`).** A real death now adds the gamertag to
+Nitrado's `settings.general.bans`, posts to the bans channel, and is auto-removed after
+`BAN_DURATION_HOURS` (12h) by `BanExpiryService`. Banning only ever applies to deaths that occur
+**after** the bot first caught up to live (`go_live_at`); historical deaths in the backlog are
+never retro-banned, and a death only bans once it clears `BAN_MIN_PLAYTIME_MINUTES` (60).
 
-1. Set `DISCORD_TOKEN`, `BANS_CHANNEL_ID`, `BAN_DURATION_HOURS=12`, and **`BAN_DRY_RUN=true`**.
-2. Run the bot (`php laracord`) and let it catch up. In dry-run, a real death creates a `bans`
-   row and logs the intended ban, but makes **no** Nitrado ban and **no** Discord post — nobody
-   is actually kicked. Inspect:
-   ```bash
-   sqlite3 database/database.sqlite \
-     "select b.banned_at,b.expires_at,b.source,p.gamertag from bans b join players p on p.id=b.player_id order by b.banned_at desc limit 10;"
-   ```
-   Confirm only real post-go-live deaths appear.
-3. When satisfied, set **`BAN_DRY_RUN=false`** and restart. Now a death adds the gamertag to
-   Nitrado's `settings.general.bans`, posts to the bans channel, and is auto-removed after 12h
-   by `BanExpiryService`. Verify the live ban list any time:
-   ```bash
-   php laracord tinker
-   >>> (new App\Services\Nitrado\NitradoClient(env('NITRADO_TOKEN'), (int) env('NITRADO_SERVICE_ID')))->getBans();
-   ```
+Verify the live ban list any time:
+
+```bash
+php laracord tinker
+>>> (new App\Services\Nitrado\NitradoClient(env('NITRADO_TOKEN'), (int) env('NITRADO_SERVICE_ID')))->getBans();
+```
+
+Inspect recorded bans in the DB:
+
+```bash
+sqlite3 database/database.sqlite \
+  "select b.banned_at,b.expires_at,b.source,p.gamertag from bans b join players p on p.id=b.player_id order by b.banned_at desc limit 10;"
+```
+
+For local or staging runs, set **`BAN_DRY_RUN=true`**: a death still records a `bans` row and logs
+the intended ban, but makes **no** Nitrado ban and **no** Discord post — the safe lever for testing
+without kicking anyone.
 
 ## How it works
 
@@ -122,7 +126,8 @@ Banning only ever applies to deaths that occur **after** the bot first catches u
 - `app/Services/Ban/BanService.php` — bans/unbans a player: writes the `bans` table, applies
   to Nitrado's `general.bans`, notifies Discord; honors `BAN_DRY_RUN`.
 - `app/Services/Ban/DeathBanService.php` — after each tick, bans players whose lives ended
-  after `go_live_at` and aren't yet banned (idempotent via `lives.ban_issued`).
+  after `go_live_at`, cleared `BAN_MIN_PLAYTIME_MINUTES` (60) of playtime, and aren't yet banned
+  (idempotent via `lives.ban_issued`).
 - `app/Services/BanExpiryService.php` — 60s service: lifts expired bans, reconciles Nitrado.
 - `app/Services/IngestAdmService.php` — 60s service wrapping the ingestor + death-ban pass.
 - `app/Services/Online/{OnlineRosterQuery,OnlineRosterComposer,OnlineRosterNotifier,NullOnlineRosterNotifier,DiscordOnlineRosterNotifier}.php`
