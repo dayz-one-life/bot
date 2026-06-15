@@ -4,6 +4,7 @@ namespace App\Services\Ban;
 
 use App\Models\Ban;
 use App\Models\Player;
+use App\Services\Llm\FlavorGenerator;
 use App\Services\Lookup\PlayerMention;
 use App\Services\Personality\MessagePicker;
 use Discord\Discord;
@@ -12,9 +13,16 @@ class DiscordBanNotifier implements BanNotifier
 {
     private MessagePicker $picker;
 
-    public function __construct(private ?Discord $discord, private ?string $bansChannelId, ?MessagePicker $picker = null)
-    {
+    private FlavorGenerator $flavor;
+
+    public function __construct(
+        private ?Discord $discord,
+        private ?string $bansChannelId,
+        ?MessagePicker $picker = null,
+        ?FlavorGenerator $flavor = null,
+    ) {
         $this->picker = $picker ?? new MessagePicker();
+        $this->flavor = $flavor ?? FlavorGenerator::fromConfig();
     }
 
     public function banned(Ban $ban, Player $player, bool $isExtension): void
@@ -24,13 +32,11 @@ class DiscordBanNotifier implements BanNotifier
         $key = self::bannedKey($ban, $isExtension);
 
         $fallbackAction = $isExtension ? 'Ban updated' : 'Player banned';
-        if (self::postsToChannel($key)) {
-            $this->toChannel($this->picker->pick(
-                $key,
-                [':who' => $who, ':reason' => $ban->reason, ':expires' => $expires],
-                "🔨 **{$fallbackAction}** — {$who} · {$ban->reason} · expires {$expires}"
-            ));
-        }
+        $this->toChannel($this->flavor->line(
+            $key,
+            ['who' => $who, 'reason' => $ban->reason, 'expires' => $expires],
+            "🔨 **{$fallbackAction}** — {$who} · {$ban->reason} · expires {$expires}"
+        ));
 
         if ($player->discord_user_id) {
             $dmFallback = "🔨 You have been **banned** from the server.\n• Reason: {$ban->reason}\n• Expires: {$expires}";
@@ -44,9 +50,9 @@ class DiscordBanNotifier implements BanNotifier
     public function unbanned(Player $player, string $reason, ?string $originalReason): void
     {
         $who = (new PlayerMention())->forPlayer($player);
-        $this->toChannel($this->picker->pick(
+        $this->toChannel($this->flavor->line(
             'ban.unbanned',
-            [':who' => $who, ':reason' => $reason],
+            ['who' => $who, 'reason' => $reason],
             "✅ **Player unbanned** — {$who} · {$reason}"
         ));
 
@@ -70,17 +76,6 @@ class DiscordBanNotifier implements BanNotifier
         }
 
         return $ban->source === 'auto_death' ? 'ban.death' : 'ban.manual';
-    }
-
-    /**
-     * Whether the ban notifier posts this key to the bans channel. The lifecycle eulogy
-     * feed (LifecycleAnnouncer) owns the public death announcement, so ban.death is
-     * channel-suppressed here; the ban.dm.death DM is still sent. Public + static so it
-     * is unit-testable without a Discord gateway.
-     */
-    public static function postsToChannel(string $key): bool
-    {
-        return $key !== 'ban.death';
     }
 
     /**
