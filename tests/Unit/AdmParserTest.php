@@ -40,6 +40,29 @@ it('parses a PvP death with no distance', function () {
     expect($r['distance'])->toBeNull();
 });
 
+it('extracts weapon and distance from a realistic kill line (pos=<> inside both id-parens)', function () {
+    // Real ADM kill lines embed pos=<x, y, z> inside both players' (id=...) parens. The weapon and
+    // distance must still be captured from the tail after the killer's closing paren — a regression
+    // guard for KILL_RE / WEAPON_RE so the longest-distance leaderboard + newspaper furthest_kill work.
+    $line = '10:00:00 | Player "Victim" (DEAD) (id=ABC pos=<7404.1, 3229.9, 6.1>) killed by Player "Killer" (id=XYZ pos=<7500.0, 3300.0, 6.0>) with M4A1 from 153.4 meters';
+    $r = $this->parser->parseDeath($line);
+    expect($r['cause'])->toBe('pvp');
+    expect($r['killer'])->toBe('Killer');
+    expect($r['weapon'])->toBe('M4A1');
+    expect($r['distance'])->toBe(153.4);
+});
+
+it('attributes a killer but leaves weapon/distance null when the kill line has no weapon clause', function () {
+    // Some PvP deaths log only "killed by Player X" with no "with <weapon>" tail; killer is still
+    // attributed, but weapon/distance are legitimately null (this is why furthest_kill can be empty).
+    $line = '10:00:00 | Player "Victim" (DEAD) (id=ABC pos=<1,2,3>) killed by Player "Killer" (id=XYZ pos=<4,5,6>)';
+    $r = $this->parser->parseDeath($line);
+    expect($r['cause'])->toBe('pvp');
+    expect($r['killer'])->toBe('Killer');
+    expect($r['weapon'])->toBeNull();
+    expect($r['distance'])->toBeNull();
+});
+
 it('parses a PvP death for a multi-word player name', function () {
     $line = '10:00:00 | Player "John Doe" (DEAD) (id=V=) killed by Player "Jane Smith" (id=K=) with M4A1 from 12.0 meters';
     $r = $this->parser->parseDeath($line);
@@ -128,6 +151,18 @@ it('parses negative coordinates', function () {
     expect($r)->toBe(['gamertag' => 'A', 'x' => -500.0, 'y' => -200.5]);
 });
 
+it('rejects an off-map sentinel position (DayZ -FLT_MAX "unknown position")', function () {
+    // DayZ writes ~ -FLT_MAX (a 39-digit decimal expansion) when a player's position is unknown.
+    // Fed into distance math this produces astronomically wrong travel totals, so it must be dropped.
+    $line = '12:34:56 | Player "Ghost" (id=G=) pos=<-340282346638528859811704183484516925440.000000, -340282346638528859811704183484516925440.000000, 0.000000>';
+    expect($this->parser->parsePosition($line))->toBeNull();
+});
+
+it('keeps a valid in-bounds position near the map edge', function () {
+    $r = $this->parser->parsePosition('12:34:56 | Player "Edge" (id=E=) pos=<15296.1, 15241.0, 3.0>');
+    expect($r)->toBe(['gamertag' => 'Edge', 'x' => 15296.1, 'y' => 15241.0]);
+});
+
 it('parses a bunker entrance teleport line', function () {
     $line = '02:30:35 | Player "RonaldRaygun552" (id=89B90470 pos=<5154.0, 1075.1, 56.3>) was teleported from: <4767.4, 339.4, 10376.3> to: <5154.0, 56.3, 1075.1>. Reason: Spawning in Player Restricted Area: RestrictedAreaBunkerEntrance';
     expect($this->parser->parseBunkerEntrance($line))->toBe(['gamertag' => 'RonaldRaygun552']);
@@ -166,6 +201,15 @@ it('parses an infected hit and humanizes the source', function () {
     expect($h['attacker_gamertag'])->toBeNull();
     expect($h['attacker_label'])->toBe('an infected jogger');
     expect($h['body_part'])->toBe('Leg');
+});
+
+it('classifies a real infected hit line (source token "Infected", not a Zmb class name)', function () {
+    // Real ADM hit lines name the source as the word "Infected" with a trailing
+    // "(N) for X damage (MeleeInfected)" suffix — unlike the kill line, which uses ZmbM_*.
+    $line = '16:37:51 | Player "RonaldRaygun552" (id=89B90470 pos=<13426.5, 6308.3, 6.0>)[HP: 64.2] hit by Infected into Torso(1) for 6.175 damage (MeleeInfected)';
+    $h = $this->parser->parseHit($line);
+    expect($h['attacker_type'])->toBe('infected');
+    expect($h['attacker_gamertag'])->toBeNull();
 });
 
 it('parses an animal hit', function () {

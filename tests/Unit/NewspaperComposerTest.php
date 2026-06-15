@@ -44,6 +44,28 @@ it('never @-mentions', function () {
     }
 });
 
+it('hides empty (zero-count / null-superlative) categories in the Week in Numbers box', function () {
+    $facts = sampleFacts();
+    $facts['counts']['infected_attacks'] = 0;
+    $facts['counts']['bunker_descents'] = 0;
+    $facts['superlatives']['furthest_kill'] = null;
+    $facts['superlatives']['most_travelled'] = null;
+
+    $embeds = (new NewspaperComposer())->compose($facts, ['editorial' => 'a', 'recap' => 'b', 'classifieds' => 'c'], 1);
+    $numbers = $embeds[2]['description'];
+
+    // Empty categories are omitted entirely.
+    expect($numbers)->not->toContain('Infected attacks');
+    expect($numbers)->not->toContain('Bunker descents');
+    expect($numbers)->not->toContain('Furthest kill');
+    expect($numbers)->not->toContain('Most travelled');
+
+    // Non-empty categories remain.
+    expect($numbers)->toContain('Lives lost');
+    expect($numbers)->toContain('Deadliest player');
+    expect($numbers)->toContain('Longest life ended');
+});
+
 it('handles a quiet week with empty prose and null superlatives', function () {
     $facts = [
         'period' => ['start' => '2026-06-06T22:00:00+00:00', 'end' => '2026-06-13T22:00:00+00:00'],

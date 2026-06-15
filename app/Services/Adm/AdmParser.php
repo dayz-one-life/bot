@@ -13,6 +13,10 @@ class AdmParser
     private const TIME_RE = '/^(\d{2}):(\d{2}):(\d{2})/';
     private const PLAYER_NAME_RE = '/Player "([^"]+)"/u';
     private const POSITION_RE = '/pos=<\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\s*>/u';
+
+    // Chernarus map bounds (with a ~1km margin) used to reject DayZ's off-map "unknown position" sentinel.
+    private const MAP_MIN = -1000.0;
+    private const MAP_MAX = 16360.0;
     private const BUNKER_ENTRANCE_RE = '/Player "([^"]+)".*was teleported.*RestrictedAreaBunkerEntrance$/u';
 
     private const DAY_MS = 86400000;
@@ -149,7 +153,19 @@ class AdmParser
         if (str_contains($raw, 'hit by')) return null;
         if (!preg_match(self::PLAYER_NAME_RE, $raw, $p)) return null;
         if (!preg_match(self::POSITION_RE, $raw, $c)) return null;
-        return ['gamertag' => $p[1], 'x' => (float) $c[1], 'y' => (float) $c[2]];
+        $x = (float) $c[1];
+        $y = (float) $c[2];
+        // DayZ logs ~ -FLT_MAX (a 39-digit decimal) for an unknown position. Fed into distance
+        // math that sentinel yields astronomically wrong travel totals, so drop off-map samples.
+        if (!$this->inMapBounds($x, $y)) return null;
+        return ['gamertag' => $p[1], 'x' => $x, 'y' => $y];
+    }
+
+    /** Chernarus is 15360x15360; a small margin tolerates legit edge/just-off-map coordinates. */
+    private function inMapBounds(float $x, float $y): bool
+    {
+        return $x >= self::MAP_MIN && $x <= self::MAP_MAX
+            && $y >= self::MAP_MIN && $y <= self::MAP_MAX;
     }
 
     /**
@@ -196,7 +212,8 @@ class AdmParser
         $src = trim(preg_replace('/\(.*$/', '', $src));
 
         $type = match (true) {
-            str_contains($src, 'Zmb') => 'infected',
+            // Kill lines name infected as a ZmbM_* class; hit lines name them as the word "Infected".
+            str_contains($src, 'Zmb'), str_contains($src, 'Infected') => 'infected',
             str_starts_with($src, 'Animal_') => 'animal',
             default => 'environment',
         };

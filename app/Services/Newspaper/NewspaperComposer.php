@@ -58,22 +58,34 @@ class NewspaperComposer
         $deltaLives = $this->delta((int) $c['lives_lost'], (int) ($c['lives_lost_prev'] ?? 0));
         $deltaInf = $this->delta((int) $c['infected_attacks'], (int) ($c['infected_attacks_prev'] ?? 0));
 
-        $deadliest = $s['deadliest_player'] ? "`{$s['deadliest_player']['gamertag']}` ({$s['deadliest_player']['kills']})" : '—';
-        $furthest = $s['furthest_kill'] ? round($s['furthest_kill']['distance']).'m' : '—';
-        $longest = $s['longest_life_ended'] ? "`{$s['longest_life_ended']['gamertag']}` {$s['longest_life_ended']['duration_human']}" : '—';
-        $travelled = $s['most_travelled'] ? "`{$s['most_travelled']['gamertag']}` {$s['most_travelled']['km']}km" : '—';
+        // Empty categories (zero counts / absent superlatives) are omitted rather than printed as
+        // "0" or "—", so a quiet week's box stays tidy. Playtime is always shown as the scene-setter.
+        $lines = ["Total playtime ..... {$c['playtime_human']}"];
 
-        $lines = [
-            "Lives lost ......... **{$c['lives_lost']}** {$deltaLives}",
-            "Total playtime ..... {$c['playtime_human']}",
-            "Infected attacks ... **{$c['infected_attacks']}** {$deltaInf}",
-            "Bunker descents .... {$c['bunker_descents']}",
-            "Souls still alive .. {$c['souls_alive']}",
-            "Deadliest player ... {$deadliest}",
-            "Furthest kill ...... {$furthest}",
-            "Longest life ended . {$longest}",
-            "Most travelled ..... {$travelled}",
-        ];
+        if ((int) $c['lives_lost'] > 0) {
+            array_unshift($lines, "Lives lost ......... **{$c['lives_lost']}** {$deltaLives}");
+        }
+        if ((int) $c['infected_attacks'] > 0) {
+            $lines[] = "Infected attacks ... **{$c['infected_attacks']}** {$deltaInf}";
+        }
+        if ((int) $c['bunker_descents'] > 0) {
+            $lines[] = "Bunker descents .... {$c['bunker_descents']}";
+        }
+        if ((int) $c['souls_alive'] > 0) {
+            $lines[] = "Souls still alive .. {$c['souls_alive']}";
+        }
+        if ($s['deadliest_player']) {
+            $lines[] = "Deadliest player ... `{$s['deadliest_player']['gamertag']}` ({$s['deadliest_player']['kills']})";
+        }
+        if ($s['furthest_kill']) {
+            $lines[] = 'Furthest kill ...... '.round($s['furthest_kill']['distance']).'m';
+        }
+        if ($s['longest_life_ended']) {
+            $lines[] = "Longest life ended . `{$s['longest_life_ended']['gamertag']}` {$s['longest_life_ended']['duration_human']}";
+        }
+        if ($s['most_travelled']) {
+            $lines[] = "Most travelled ..... `{$s['most_travelled']['gamertag']}` {$s['most_travelled']['km']}km";
+        }
 
         return [
             'title' => '📊 THE WEEK IN NUMBERS',
