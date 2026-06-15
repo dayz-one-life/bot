@@ -2,7 +2,10 @@
 
 use App\Services\Llm\OpenRouterClient;
 use App\Services\Newspaper\NewspaperGenerator;
+use App\Services\Personality\MessagePicker;
 use Illuminate\Support\Facades\Http;
+
+beforeEach(fn () => MessagePicker::reset());
 
 it('parses the three sections from a well-formed LLM response', function () {
     Http::fake([
@@ -22,7 +25,10 @@ it('parses the three sections from a well-formed LLM response', function () {
 it('falls back to canned pools when the API fails', function () {
     Http::fake(['*' => Http::response('nope', 500)]);
 
-    $gen = new NewspaperGenerator(new OpenRouterClient('key', 'm', 'https://x/api/v1'));
+    // Deterministic picker (always index 0) so the :lives_lost interpolation assertion below
+    // doesn't silently depend on which random template the anti-repeat chooser lands on.
+    $picker = new MessagePicker(fn (array $pool, ?int $avoid) => 0);
+    $gen = new NewspaperGenerator(new OpenRouterClient('key', 'm', 'https://x/api/v1'), $picker);
     $out = $gen->generate(['counts' => ['lives_lost' => 5, 'playtime_human' => '300h']]);
 
     expect($out['editorial'])->toContain('5');
