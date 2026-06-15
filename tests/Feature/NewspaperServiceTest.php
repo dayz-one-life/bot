@@ -65,3 +65,15 @@ it('never publishes before go_live', function () {
     expect($notifier->calls)->toBe(0);
     CarbonImmutable::setTestNow();
 });
+
+it('does not publish when the feature is disabled', function () {
+    config()->set('newspaper.enabled', false);
+    CarbonImmutable::setTestNow('2026-06-12 22:00:00'); // Friday 22:00 UTC — otherwise due
+    $state = new BotState();
+    $state->set('go_live_at', '2026-01-01T00:00:00+00:00');
+    $notifier = capturingNotifier();
+    makeService($state, $notifier)->run(CarbonImmutable::now());
+    expect($notifier->calls)->toBe(0);
+    config()->set('newspaper.enabled', true);
+    CarbonImmutable::setTestNow();
+});
