@@ -108,13 +108,22 @@ class LifecycleAnnouncer
     /**
      * Defense in depth: any placeholder the model emitted that we had no name to substitute — e.g. a
      * stray {{KILLER}} in a birth — must NEVER reach Discord. Drop the leftover token(s) and tidy the
-     * seam (doubled spaces, a space stranded before punctuation) so the prose still reads cleanly.
+     * seam so the prose still reads cleanly.
+     *
+     * Two guards keep this from harming well-formed copy:
+     *  - It no-ops entirely when there is no token to strip, so a clean post is never reformatted.
+     *  - The seam cleanup touches only HORIZONTAL whitespace ([^\S\n]); it must never collapse the
+     *    article's paragraph breaks / blockquotes (a `\s`-based rule would flatten them into one line).
      */
     private function stripTokens(string $text): string
     {
+        if (! str_contains($text, '{{')) {
+            return $text;
+        }
+
         $text = preg_replace('/\{\{[A-Z_]+\}\}/', '', $text);
-        $text = preg_replace('/\s{2,}/', ' ', $text);
-        $text = preg_replace('/\s+([.,!?;:])/', '$1', $text);
+        $text = preg_replace('/[^\S\n]{2,}/', ' ', $text);
+        $text = preg_replace('/[^\S\n]+([.,!?;:])/', '$1', $text);
 
         return trim($text);
     }
