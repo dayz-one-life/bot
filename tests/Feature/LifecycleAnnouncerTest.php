@@ -167,6 +167,47 @@ it('strips any unsubstituted placeholder token the LLM leaves behind', function 
     expect($birth['description'])->toContain('Returner'); // {{PLAYER}} still substituted
 });
 
+it('preserves paragraph breaks when stripping a stray token', function () {
+    // The token-stripping safety net must only tidy horizontal whitespace — it must NEVER flatten the
+    // newspaper article's paragraph breaks / blockquotes into a wall of text.
+    lifeWith('Formatted', 360, null);
+
+    $gen = new class(OpenRouterClient::fromConfig()) extends AnnouncementGenerator {
+        public function generate(string $kind, array $facts): array {
+            return [
+                'headline' => 'REBORN',
+                'body' => "{{PLAYER}} is back.\n\n> A witness spoke, last felled by {{KILLER}}.\n\nThe end.",
+            ];
+        }
+    };
+    $payload = (new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30))
+        ->run();
+
+    $desc = $this->notifier->births[0]['description'];
+    expect($desc)->not->toContain('{{');               // token still stripped
+    expect($desc)->toContain("\n\n");                  // paragraph breaks survive
+    expect(substr_count($desc, "\n\n"))->toBe(2);      // both blank lines intact
+    expect($desc)->toContain('Formatted');
+});
+
+it('leaves a token-free post completely untouched', function () {
+    // No stray token => the sweep must not reformat the copy at all (no whitespace meddling).
+    lifeWith('Clean', 360, null);
+
+    $body = "First paragraph.\n\n> quote\n\nSecond  paragraph.";
+    $gen = new class(OpenRouterClient::fromConfig()) extends AnnouncementGenerator {
+        public string $b = '';
+        public function generate(string $kind, array $facts): array {
+            return ['headline' => 'CLEAN ARRIVAL', 'body' => $this->b];
+        }
+    };
+    $gen->b = $body;
+    (new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30))->run();
+
+    // No {{PLAYER}} in this body, so the description is the body verbatim.
+    expect($this->notifier->births[0]['description'])->toBe($body);
+});
+
 it('does NOT birth an immediate respawn that rerolls under the grace mark', function () {
     // The flip side: a respawn that suicides again before 5 min (spawn reroll) gets no birth.
     $lifeA = lifeWith('Rerollman', 2460, '2026-06-14T11:58:00Z', '2026-06-14T11:10:00Z');
