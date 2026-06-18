@@ -146,6 +146,27 @@ it('posts BOTH a eulogy for the dead life and a birth for an immediate respawn',
     expect($lifeB->fresh()->birth_announced_at)->not->toBeNull();
 });
 
+it('strips any unsubstituted placeholder token the LLM leaves behind', function () {
+    // A birth has no killer to substitute, but the model can still emit a stray {{KILLER}} (e.g. when
+    // narrating the prior life). The published copy must never contain a raw "{{...}}" token.
+    lifeWith('Returner', 360, null); // open life past grace
+
+    // A generator that emits copy with a stray {{KILLER}} the announcer cannot map to a name.
+    $gen = new class(OpenRouterClient::fromConfig()) extends AnnouncementGenerator {
+        public function generate(string $kind, array $facts): array {
+            return ['headline' => 'REBORN — {{KILLER}} WEEPS', 'body' => '{{PLAYER}} returns, cut short last time by {{KILLER}}. Welcome back.'];
+        }
+    };
+    $announcer = new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30);
+    $announcer->run();
+
+    $birth = $this->notifier->births[0];
+    expect($birth['description'])->not->toContain('{{');
+    expect($birth['description'])->not->toContain('}}');
+    expect($birth['title'])->not->toContain('{{');
+    expect($birth['description'])->toContain('Returner'); // {{PLAYER}} still substituted
+});
+
 it('does NOT birth an immediate respawn that rerolls under the grace mark', function () {
     // The flip side: a respawn that suicides again before 5 min (spawn reroll) gets no birth.
     $lifeA = lifeWith('Rerollman', 2460, '2026-06-14T11:58:00Z', '2026-06-14T11:10:00Z');

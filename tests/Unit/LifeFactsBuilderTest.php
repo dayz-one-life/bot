@@ -123,3 +123,17 @@ it('summarises the prior death for a respawn and marks it NOT the first life', f
     expect($facts['prior_death'])->toContain('environment');
     expect($facts['is_first_life'])->toBeFalse();
 });
+
+it('does NOT leak the prior killer gamertag into the prior-death summary', function () {
+    // The prior killer's name must never appear verbatim in prior_death: the LLM is told never to
+    // write a real name, so it converts any name it sees into the {{KILLER}} token — but a birth has
+    // no killer to substitute, leaving a raw "{{KILLER}}" in the post. Keep the summary name-free.
+    $p = Player::create(['gamertag' => 'Reborn', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T09:00:00Z', 'ended_at' => '2026-06-14T10:00:00Z', 'death_cause' => 'pvp', 'death_by_gamertag' => 'PriorSniper', 'playtime_seconds' => 3000]);
+    $current = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T11:50:00Z', 'playtime_seconds' => 360]);
+
+    $facts = (new LifeFactsBuilder())->build($current);
+
+    expect($facts['prior_death'])->toContain('pvp');
+    expect($facts['prior_death'])->not->toContain('PriorSniper');
+});
