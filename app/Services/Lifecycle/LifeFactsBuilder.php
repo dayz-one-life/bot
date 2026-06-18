@@ -155,7 +155,9 @@ class LifeFactsBuilder
 
         if (! $prev) return null;
 
-        $by = $prev->death_by_gamertag ? " by {$prev->death_by_gamertag}" : '';
-        return "previous life ended ({$prev->death_cause}{$by}) after ".SessionDuration::human((int) $prev->playtime_seconds);
+        // Deliberately name-free: the LLM is told never to write a real name, so any gamertag we feed
+        // it here gets rendered as the {{KILLER}} token — but the CURRENT life has no killer to
+        // substitute (a birth) or a DIFFERENT killer (a eulogy), leaking/mis-pointing the token.
+        return "previous life ended ({$prev->death_cause}) after ".SessionDuration::human((int) $prev->playtime_seconds);
     }
 }

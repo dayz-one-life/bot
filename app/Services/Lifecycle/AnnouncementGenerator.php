@@ -89,6 +89,10 @@ TXT;
             ? "Write a BIRTH ANNOUNCEMENT for a survivor spawning into the one-life server for the VERY FIRST TIME. They have NO previous life — do NOT invent a prior death, a past life, or how long they survived before. Celebrate and gently roast a brand-new arrival. Do NOT state how long the new life has been alive (they just spawned)."
             : "Write a BIRTH ANNOUNCEMENT for a survivor who just RESPAWNED after dying. You may reference 'previous_life' but invent nothing beyond it. Do NOT state how long the new life has been alive (they just spawned).";
 
+        // A birth has NO killer to substitute, so the {{KILLER}} token would survive verbatim. Forbid
+        // it outright — even when narrating the prior death, never name or imply who did it.
+        $intro .= " This is a BIRTH: there is NO killer. NEVER use the {{KILLER}} token, and do not name, imply, or allude to whoever ended any previous life. Refer to the subject ONLY as {{PLAYER}}.";
+
         return $intro."\n\nDETAILS (JSON):\n".$this->json($payload);
     }
 

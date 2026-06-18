@@ -97,12 +97,26 @@ class LifecycleAnnouncer
 
         return [
             'ping' => $this->ping($facts, $verb),
-            'title' => strtr($copy['headline'], $names),
-            'description' => strtr($copy['body'], $names),
+            'title' => $this->stripTokens(strtr($copy['headline'], $names)),
+            'description' => $this->stripTokens(strtr($copy['body'], $names)),
             'fields' => $this->fields($facts, $verb),
             'color' => $color,
             'footer' => $this->footer($life, $verb),
         ];
+    }
+
+    /**
+     * Defense in depth: any placeholder the model emitted that we had no name to substitute — e.g. a
+     * stray {{KILLER}} in a birth — must NEVER reach Discord. Drop the leftover token(s) and tidy the
+     * seam (doubled spaces, a space stranded before punctuation) so the prose still reads cleanly.
+     */
+    private function stripTokens(string $text): string
+    {
+        $text = preg_replace('/\{\{[A-Z_]+\}\}/', '', $text);
+        $text = preg_replace('/\s{2,}/', ' ', $text);
+        $text = preg_replace('/\s+([.,!?;:])/', '$1', $text);
+
+        return trim($text);
     }
 
     /**
