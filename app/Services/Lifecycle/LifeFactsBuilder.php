@@ -2,6 +2,7 @@
 
 namespace App\Services\Lifecycle;
 
+use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
 use App\Services\Adm\DayzNameHumanizer;
@@ -54,6 +55,10 @@ class LifeFactsBuilder
             // Real, recently-active survivors the LLM may quote as witnesses (never invent anonymous
             // ones). Excludes the subject and the killer. Plain names — not pinged.
             'witnesses' => $this->witnesses($life),
+            'population_at_spawn' => $this->populationAtSpawn($life),
+            'births_this_week' => $this->birthsThisWeek($life),
+            'deaths_this_week' => $this->deathsThisWeek($life),
+            'time_of_day' => $this->timeOfDay($life),
         ];
     }
 
@@ -141,7 +146,10 @@ class LifeFactsBuilder
         }
     }
 
-    private function priorDeath(Life $life): ?string
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function priorDeath(Life $life): ?array
     {
         $player = $life->player;
         if (! $player) return null;
@@ -155,9 +163,63 @@ class LifeFactsBuilder
 
         if (! $prev) return null;
 
-        // Deliberately name-free: the LLM is told never to write a real name, so any gamertag we feed
-        // it here gets rendered as the {{KILLER}} token — but the CURRENT life has no killer to
-        // substitute (a birth) or a DIFFERENT killer (a eulogy), leaking/mis-pointing the token.
-        return "previous life ended ({$prev->death_cause}) after ".SessionDuration::human((int) $prev->playtime_seconds);
+        // Name-free by design: never include who ended the prior life. The birth/eulogy prompt
+        // renders any gamertag as a {{KILLER}} token, which would leak or mis-point on a birth
+        // (no killer) or a different-killer eulogy. Cause/weapon/distance/age name nobody.
+        return [
+            'cause' => $prev->death_cause,
+            'weapon' => $prev->death_weapon,
+            'distance_m' => $prev->death_distance,
+            'playtime_human' => SessionDuration::human((int) $prev->playtime_seconds),
+        ];
+    }
+
+    /** Distinct OTHER players whose session spans the spawn instant — "the world they spawned into". */
+    private function populationAtSpawn(Life $life): int
+    {
+        $at = $life->started_at;
+
+        return GameSession::query()
+            ->where('player_id', '!=', $life->player_id) // exclude the subject's own session
+            ->where('connected_at', '<=', $at)
+            ->where(function ($q) use ($at) {
+                $q->whereNull('disconnected_at')->orWhere('disconnected_at', '>', $at);
+            })
+            ->distinct()
+            ->count('player_id');
+    }
+
+    private function birthsThisWeek(Life $life): int
+    {
+        $start = $life->started_at->copy()->subDays(7);
+
+        return Life::query()
+            ->where('started_at', '>=', $start)
+            ->where('started_at', '<', $life->started_at)
+            ->count();
+    }
+
+    private function deathsThisWeek(Life $life): int
+    {
+        $start = $life->started_at->copy()->subDays(7);
+
+        return Life::query()
+            ->whereNotNull('ended_at')
+            ->where('ended_at', '>=', $start)
+            ->where('ended_at', '<', $life->started_at)
+            ->count();
+    }
+
+    /** Pure: UTC spawn hour -> atmospheric bucket. */
+    private function timeOfDay(Life $life): string
+    {
+        $hour = (int) $life->started_at->copy()->utc()->format('G');
+
+        return match (true) {
+            $hour >= 5 && $hour < 8 => 'dawn',
+            $hour >= 8 && $hour < 17 => 'day',
+            $hour >= 17 && $hour < 20 => 'dusk',
+            default => 'night',
+        };
     }
 }

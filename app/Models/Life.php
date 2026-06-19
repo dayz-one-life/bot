@@ -19,4 +19,5 @@ class Life extends Model
 
     public function player() { return $this->belongsTo(Player::class); }
     public function sessions() { return $this->hasMany(GameSession::class); }
+    public function announcements() { return $this->hasMany(Announcement::class); }
 }

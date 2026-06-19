@@ -49,15 +49,15 @@ TXT;
     /**
      * @param 'birth'|'eulogy' $kind
      * @param array<string,mixed> $facts
-     * @return array{headline:string,body:string}
+     * @return array{headline:string,body:string,fallback:bool}
      */
     public function generate(string $kind, array $facts): array
     {
         try {
             $raw = $this->client->complete(self::SYSTEM, $this->userPrompt($kind, $facts));
-            return $this->split($raw);
+            return $this->split($raw) + ['fallback' => false];
         } catch (\Throwable) {
-            return $this->fallback($kind, $facts);
+            return $this->fallback($kind, $facts) + ['fallback' => true];
         }
     }
 
@@ -82,6 +82,10 @@ TXT;
             'subject_placeholder' => '{{PLAYER}}',
             'is_first_life_ever' => $isFirst,
             'previous_life' => $isFirst ? null : $facts['prior_death'],
+            'players_online_at_spawn' => $facts['population_at_spawn'],
+            'births_this_week' => $facts['births_this_week'],
+            'deaths_this_week' => $facts['deaths_this_week'],
+            'time_of_day' => $facts['time_of_day'],
             'real_survivors_for_quotes' => $facts['witnesses'] ?? [],
         ];
 
