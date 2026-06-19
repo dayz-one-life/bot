@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Announcement;
 use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
@@ -218,4 +219,41 @@ it('does NOT birth an immediate respawn that rerolls under the grace mark', func
 
     expect($this->notifier->eulogies)->toHaveCount(1); // only the real life A
     expect($this->notifier->births)->toBeEmpty();      // the 90s reroll never reached grace
+});
+
+it('persists a birth and eulogy row via the real LLM path', function () {
+    $birth = lifeWith('Born', 360, null);                          // open, 6 min, started 11:50 (due)
+    $death = lifeWith('Dead', 360, '2026-06-14T11:55:00Z');        // ended 11:55, 6 min (due)
+
+    // Bypass HTTP entirely — the generator's own fallback logic is tested in AnnouncementGeneratorTest.
+    // This test only needs to exercise record() with fallback=false.
+    $gen = new class(OpenRouterClient::fromConfig()) extends AnnouncementGenerator {
+        public function generate(string $kind, array $facts): array {
+            return ['headline' => 'HEAD', 'body' => '{{PLAYER}} body', 'fallback' => false];
+        }
+    };
+    (new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30))->run();
+
+    $b = Announcement::where('life_id', $birth->id)->where('kind', 'birth')->first();
+    expect($b)->not->toBeNull();
+    expect($b->was_fallback)->toBeFalse();
+    expect($b->model)->toBe(config('llm.model'));
+    expect($b->headline)->toBe('HEAD');
+    expect($b->body)->toContain('{{PLAYER}}'); // raw template stored, pre-substitution
+
+    $e = Announcement::where('life_id', $death->id)->where('kind', 'eulogy')->first();
+    expect($e)->not->toBeNull();
+    expect($e->was_fallback)->toBeFalse();
+    expect($e->model)->toBe(config('llm.model'));
+});
+
+it('records was_fallback=true and null model on the canned path', function () {
+    $birth = lifeWith('Canned', 360, null); // due birth; fromConfig client has no key -> fallback
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    $b = Announcement::where('life_id', $birth->id)->where('kind', 'birth')->first();
+    expect($b)->not->toBeNull();
+    expect($b->was_fallback)->toBeTrue();
+    expect($b->model)->toBeNull();
 });

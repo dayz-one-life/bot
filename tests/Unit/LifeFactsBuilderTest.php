@@ -120,7 +120,7 @@ it('summarises the prior death for a respawn and marks it NOT the first life', f
     $facts = (new LifeFactsBuilder())->build($current);
 
     expect($facts['linked'])->toBeFalse();
-    expect($facts['prior_death'])->toContain('environment');
+    expect($facts['prior_death']['cause'])->toBe('environment');
     expect($facts['is_first_life'])->toBeFalse();
 });
 
@@ -134,6 +134,57 @@ it('does NOT leak the prior killer gamertag into the prior-death summary', funct
 
     $facts = (new LifeFactsBuilder())->build($current);
 
-    expect($facts['prior_death'])->toContain('pvp');
-    expect($facts['prior_death'])->not->toContain('PriorSniper');
+    expect($facts['prior_death']['cause'])->toBe('pvp');
+    expect(json_encode($facts['prior_death']))->not->toContain('PriorSniper'); // name-free: no killer gamertag in any field
+});
+
+it('counts the world the player spawned into, excluding their own session', function () {
+    $subject = Player::create(['gamertag' => 'New', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $a = Player::create(['gamertag' => 'A', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $b = Player::create(['gamertag' => 'B', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+
+    $life = Life::create(['player_id' => $subject->id, 'started_at' => '2026-06-14T12:00:00Z', 'playtime_seconds' => 0]);
+
+    // A is online across the spawn instant (open session) -> counts.
+    \App\Models\GameSession::create(['player_id' => $a->id, 'life_id' => $life->id, 'connected_at' => '2026-06-14T11:50:00Z', 'disconnected_at' => null]);
+    // B logged out before spawn -> does not count.
+    \App\Models\GameSession::create(['player_id' => $b->id, 'life_id' => $life->id, 'connected_at' => '2026-06-14T10:00:00Z', 'disconnected_at' => '2026-06-14T11:00:00Z']);
+    // Subject's own open session -> excluded.
+    \App\Models\GameSession::create(['player_id' => $subject->id, 'life_id' => $life->id, 'connected_at' => '2026-06-14T12:00:00Z', 'disconnected_at' => null]);
+
+    $facts = (new LifeFactsBuilder())->build($life);
+
+    expect($facts['population_at_spawn'])->toBe(1); // only A
+});
+
+it('counts births and deaths in the 7 days before the spawn', function () {
+    $p = Player::create(['gamertag' => 'P', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+
+    // Within the window [spawn-7d, spawn): 2 births, 1 death.
+    Life::create(['player_id' => $p->id, 'started_at' => '2026-06-10T00:00:00Z', 'ended_at' => '2026-06-11T00:00:00Z', 'death_cause' => 'pvp', 'playtime_seconds' => 60]);
+    Life::create(['player_id' => $p->id, 'started_at' => '2026-06-12T00:00:00Z', 'playtime_seconds' => 60]);
+    // Outside the window (older than 7 days): ignored.
+    Life::create(['player_id' => $p->id, 'started_at' => '2026-06-01T00:00:00Z', 'ended_at' => '2026-06-02T00:00:00Z', 'death_cause' => 'pvp', 'playtime_seconds' => 60]);
+
+    $life = Life::create(['player_id' => $p->id, 'started_at' => '2026-06-14T12:00:00Z', 'playtime_seconds' => 0]);
+
+    $facts = (new LifeFactsBuilder())->build($life);
+
+    expect($facts['births_this_week'])->toBe(2); // the two inside the window (the subject's own life starts AT the boundary, excluded by `<`)
+    expect($facts['deaths_this_week'])->toBe(1); // only the 06-11 death (06-02 is >7d before)
+});
+
+it('buckets the spawn hour into a time of day', function () {
+    $p = Player::create(['gamertag' => 'Q', 'first_seen_at' => now(), 'last_seen_at' => now()]);
+    $cases = [
+        '2026-06-14T06:00:00Z' => 'dawn',
+        '2026-06-14T12:00:00Z' => 'day',
+        '2026-06-14T18:00:00Z' => 'dusk',
+        '2026-06-14T23:00:00Z' => 'night',
+        '2026-06-14T03:00:00Z' => 'night',
+    ];
+    foreach ($cases as $ts => $expected) {
+        $life = Life::create(['player_id' => $p->id, 'started_at' => $ts, 'playtime_seconds' => 0]);
+        expect((new LifeFactsBuilder())->build($life)['time_of_day'])->toBe($expected);
+    }
 });
