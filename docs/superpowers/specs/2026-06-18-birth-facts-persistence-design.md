@@ -35,7 +35,7 @@ posted or detect repetition programmatically.
 
 - Backfilling the ~40 existing births: their generated text was never saved and cannot be
   recovered. The new table populates going forward only.
-- Changing the eulogy *prompt* — its facts are already rich. (Eulogy *text* is still persisted.)
+- Changing the eulogy *prompt template* — its facts are already rich. (Eulogy *text* is still persisted.) Note: because `priorDeath()` is a shared private method, the eulogy's `prior_life` block now carries the same enriched `{cause, weapon, distance_m, playtime_human}` structure as the birth prompt — this is intentional and name-free (no killer gamertag).
 - Removing the existing crash-window duplicate-post risk (publish succeeds, then the process dies
   before the marker update). This is pre-existing and unchanged by this work.
 

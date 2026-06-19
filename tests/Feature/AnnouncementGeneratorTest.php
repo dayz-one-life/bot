@@ -140,6 +140,25 @@ it('reports fallback=false on a successful completion', function () {
     expect($gen->generate('birth', genFacts(['is_first_life' => true]))['fallback'])->toBeFalse();
 });
 
+it('eulogy prompt serializes the enriched prior_life shape without a prior-killer name', function () {
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "RIP\n📰 {{PLAYER}} body"]]],
+    ])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    $gen->generate('eulogy', genFacts([
+        'prior_death' => ['cause' => 'environment', 'weapon' => null, 'distance_m' => null, 'playtime_human' => '12 minutes'],
+    ]));
+
+    Http::assertSent(function ($r) {
+        $user = $r['messages'][1]['content'];
+        return str_contains($user, '"prior_life"')
+            && str_contains($user, '"cause": "environment"')
+            && str_contains($user, '12 minutes')
+            && ! str_contains($user, 'PriorSniper'); // no prior-killer name leaks into prior_life
+    });
+});
+
 it('reports fallback=true when the client throws', function () {
     Http::fake(['*/chat/completions' => Http::response([], 500)]);
     $gen = new AnnouncementGenerator(
