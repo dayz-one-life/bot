@@ -29,6 +29,7 @@
         <env name="NEWSPAPER_ENABLED" value="true"/>
         <env name="NEWSPAPER_PUBLISH_DOW" value="5"/>
         <env name="NEWSPAPER_PUBLISH_HOUR_UTC" value="22"/>
+        <env name="NEWSPAPER_MAX_TOKENS" value="2000"/>
         <env name="LIFECYCLE_ENABLED" value="true"/>
         <env name="LIFE_GRACE_MINUTES" value="5"/>
         <env name="BAN_MIN_PLAYTIME_MINUTES" value="60"/>

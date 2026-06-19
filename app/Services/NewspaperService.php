@@ -40,7 +40,7 @@ class NewspaperService extends Service
         }
         $this->state = $state ?? new BotState();
         $this->facts = $facts ?? new WeeklyFactsBuilder();
-        $this->generator = $generator ?? new NewspaperGenerator(OpenRouterClient::fromConfig());
+        $this->generator = $generator ?? new NewspaperGenerator(OpenRouterClient::fromConfig((int) config('newspaper.max_tokens', 2000)));
         $this->notifier = $notifier;
     }
 
