@@ -14,6 +14,7 @@ function genFacts(array $over = []): array {
         'playtime_human' => '41 minutes', 'playtime_seconds' => 2460, 'associates' => ['Buddy'],
         'prior_death' => null, 'raw_log' => "00:02 hit\n00:03 killed by Sniper",
         'witnesses' => ['Charlie', 'Dave'],
+        'population_at_spawn' => 4, 'births_this_week' => 3, 'deaths_this_week' => 5, 'time_of_day' => 'dusk',
     ], $over);
 }
 
@@ -79,16 +80,20 @@ it('passes real active survivors for witness quotes (births and eulogies)', func
 
 it('birth prompt for a respawn passes the real prior-life summary', function () {
     Http::fake(['*/chat/completions' => Http::response([
-        'choices' => [['message' => ['content' => "BACK\n📰 {{PLAYER}} returns."]]],
+        'choices' => [['message' => ['content' => "BACK AGAIN\n📰 {{PLAYER}} returns."]]],
     ])]);
     $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
 
-    $gen->generate('birth', genFacts(['is_first_life' => false, 'prior_death' => 'previous life ended (pvp) after 18 minutes']));
+    $gen->generate('birth', genFacts([
+        'is_first_life' => false,
+        'prior_death' => ['cause' => 'pvp', 'weapon' => 'AKM', 'distance_m' => 18.0, 'playtime_human' => '18 minutes'],
+    ]));
 
     Http::assertSent(function ($r) {
         $user = $r['messages'][1]['content'];
         return str_contains($user, '"is_first_life_ever": false')
-            && str_contains($user, 'previous life ended (pvp) after 18 minutes');
+            && str_contains($user, '"cause": "pvp"')
+            && str_contains($user, '18 minutes');
     });
 });
 
@@ -104,4 +109,43 @@ it('falls back to a canned birth when there is no api key', function () {
     expect($out['headline'])->not->toBe('');
     expect($out['body'])->toContain('{{PLAYER}}');
     Http::assertNothingSent();
+});
+
+it('birth prompt includes population, weekly counts, and time of day', function () {
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "DAWN ARRIVAL\n📰 {{PLAYER}} appears."]]],
+    ])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    $gen->generate('birth', genFacts([
+        'is_first_life' => true,
+        'population_at_spawn' => 7, 'births_this_week' => 2, 'deaths_this_week' => 9, 'time_of_day' => 'dawn',
+    ]));
+
+    Http::assertSent(function ($r) {
+        $user = $r['messages'][1]['content'];
+        return str_contains($user, '"players_online_at_spawn": 7')
+            && str_contains($user, '"births_this_week": 2')
+            && str_contains($user, '"deaths_this_week": 9')
+            && str_contains($user, '"time_of_day": "dawn"');
+    });
+});
+
+it('reports fallback=false on a successful completion', function () {
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "H\n📰 body"]]],
+    ])]);
+    $gen = new AnnouncementGenerator(new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0), new MessagePicker());
+
+    expect($gen->generate('birth', genFacts(['is_first_life' => true]))['fallback'])->toBeFalse();
+});
+
+it('reports fallback=true when the client throws', function () {
+    Http::fake(['*/chat/completions' => Http::response([], 500)]);
+    $gen = new AnnouncementGenerator(
+        new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0),
+        new MessagePicker(fn (array $pool, ?int $avoid) => 0),
+    );
+
+    expect($gen->generate('eulogy', genFacts())['fallback'])->toBeTrue();
 });
