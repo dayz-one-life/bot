@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Announcement;
 use App\Models\GameSession;
 use App\Models\Life;
 use App\Models\Player;
@@ -220,26 +221,17 @@ it('does NOT birth an immediate respawn that rerolls under the grace mark', func
     expect($this->notifier->births)->toBeEmpty();      // the 90s reroll never reached grace
 });
 
-use App\Models\Announcement;
-
 it('persists a birth and eulogy row via the real LLM path', function () {
-    // Reset stubs so the specific pattern below takes priority over beforeEach's catch-all.
-    $factory = app(\Illuminate\Http\Client\Factory::class);
-    $prop = new \ReflectionProperty($factory, 'stubCallbacks');
-    $prop->setAccessible(true);
-    $prop->setValue($factory, collect());
-
-    Http::fake(['*/chat/completions' => Http::response([
-        'choices' => [['message' => ['content' => "HEAD\n📰 {{PLAYER}} body"]]],
-    ])]);
-
     $birth = lifeWith('Born', 360, null);                          // open, 6 min, started 11:50 (due)
     $death = lifeWith('Dead', 360, '2026-06-14T11:55:00Z');        // ended 11:55, 6 min (due)
 
-    $gen = new AnnouncementGenerator(
-        new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0),
-        new MessagePicker(fn ($p, $a) => 0),
-    );
+    // Bypass HTTP entirely — the generator's own fallback logic is tested in AnnouncementGeneratorTest.
+    // This test only needs to exercise record() with fallback=false.
+    $gen = new class(OpenRouterClient::fromConfig()) extends AnnouncementGenerator {
+        public function generate(string $kind, array $facts): array {
+            return ['headline' => 'HEAD', 'body' => '{{PLAYER}} body', 'fallback' => false];
+        }
+    };
     (new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30))->run();
 
     $b = Announcement::where('life_id', $birth->id)->where('kind', 'birth')->first();
@@ -249,7 +241,10 @@ it('persists a birth and eulogy row via the real LLM path', function () {
     expect($b->headline)->toBe('HEAD');
     expect($b->body)->toContain('{{PLAYER}}'); // raw template stored, pre-substitution
 
-    expect(Announcement::where('life_id', $death->id)->where('kind', 'eulogy')->count())->toBe(1);
+    $e = Announcement::where('life_id', $death->id)->where('kind', 'eulogy')->first();
+    expect($e)->not->toBeNull();
+    expect($e->was_fallback)->toBeFalse();
+    expect($e->model)->toBe(config('llm.model'));
 });
 
 it('records was_fallback=true and null model on the canned path', function () {

@@ -224,6 +224,7 @@ class LifecycleAnnouncer
      */
     private function record(Life $life, string $kind, array $copy): void
     {
+        // AnnouncementGenerator always sets fallback; ?? false tolerates lightweight test-double generators.
         $fallback = $copy['fallback'] ?? false;
         Announcement::create([
             'life_id' => $life->id,
