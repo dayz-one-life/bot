@@ -37,6 +37,10 @@ HARD RULES:
 - Refer to players by their exact gamertag from the data. Any witness/reaction quote MUST be
   attributed to one of the gamertags in 'witnesses' (never an invented anonymous bystander). If
   'witnesses' is empty, omit quotes.
+- CONTINUITY: If the data includes `last_week_issue` (last week's published prose) and `previous_week`
+  (last week's events), treat this as an ongoing publication: continue and evolve running
+  storylines/feuds, and AVOID re-telling last week's stories or reusing its jokes and classifieds.
+  This week's events are always the lead; last week is background.
 - LOCATION POLICY (critical): You MAY mention a town/region name ONLY when it appears in the
   'location_trends' data, and ONLY as an aggregate trend ("infected attacks around Cherno are up").
   NEVER state or imply WHERE a specific named player was, died, fought, or lives. NEVER output
@@ -52,12 +56,13 @@ TXT;
 
     /**
      * @param array<string,mixed> $facts
+     * @param array{week:string,editorial:string,recap:string,classifieds:string}|null $priorIssue
      * @return array{editorial:string,recap:string,classifieds:string}
      */
-    public function generate(array $facts): array
+    public function generate(array $facts, ?array $priorIssue = null): array
     {
         try {
-            $raw = $this->client->complete(self::SYSTEM, $this->userPrompt($facts));
+            $raw = $this->client->complete(self::SYSTEM, $this->userPrompt($facts, $priorIssue));
             $parsed = $this->split($raw);
         } catch (\Throwable) {
             $parsed = ['editorial' => '', 'recap' => '', 'classifieds' => ''];
@@ -72,10 +77,15 @@ TXT;
         return $parsed;
     }
 
-    private function userPrompt(array $facts): string
+    private function userPrompt(array $facts, ?array $priorIssue = null): string
     {
+        $payload = $facts;
+        if ($priorIssue !== null) {
+            $payload['last_week_issue'] = $priorIssue;
+        }
+
         return "Write this week's issue from these facts (JSON):\n".
-            json_encode($facts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** @return array{editorial:string,recap:string,classifieds:string} */

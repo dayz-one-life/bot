@@ -72,7 +72,9 @@ class NewspaperService extends Service
         }
 
         $facts = $this->facts->build($now);
-        $prose = $this->generator->generate($facts);
+        $facts['previous_week'] = $this->facts->build($now->subWeek());
+        $priorIssue = $this->decodePriorIssue();
+        $prose = $this->generator->generate($facts, $priorIssue);
         $issueNumber = $this->state->getInt('newspaper_issue_count', 0) + 1;
         $embeds = (new NewspaperComposer())->compose($facts, $prose, $issueNumber);
 
@@ -80,6 +82,24 @@ class NewspaperService extends Service
 
         $this->state->set('last_newspaper_week', $weekKey);
         $this->state->setInt('newspaper_issue_count', $issueNumber);
+        $this->state->set('last_newspaper_issue', json_encode([
+            'week' => $weekKey,
+            'editorial' => $prose['editorial'],
+            'recap' => $prose['recap'],
+            'classifieds' => $prose['classifieds'],
+        ]));
+    }
+
+    /** Decoded prior-issue prose ({week,editorial,recap,classifieds}), or null when unset/malformed. */
+    private function decodePriorIssue(): ?array
+    {
+        $raw = $this->state->get('last_newspaper_issue');
+        if (! $raw) {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     /** True once we're at/after this ISO week's publish moment (dow + utc hour). */
