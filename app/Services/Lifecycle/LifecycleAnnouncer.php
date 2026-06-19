@@ -2,6 +2,7 @@
 
 namespace App\Services\Lifecycle;
 
+use App\Models\Announcement;
 use App\Models\Life;
 use App\Services\Life\LivePlaytime;
 use App\Services\State\BotState;
@@ -58,6 +59,7 @@ class LifecycleAnnouncer
             $facts = $this->factsBuilder()->build($life);
             $copy = $this->generator->generate('birth', $facts);
             $this->notifier->publishBirth($this->payload($copy, $facts, self::BIRTH_COLOR, $life, 'born'));
+            $this->record($life, 'birth', $copy);
             $life->update(['birth_announced_at' => CarbonImmutable::now()]);
         }
     }
@@ -78,6 +80,7 @@ class LifecycleAnnouncer
             $facts = $this->factsBuilder()->build($life);
             $copy = $this->generator->generate('eulogy', $facts);
             $this->notifier->publishEulogy($this->payload($copy, $facts, self::EULOGY_COLOR, $life, 'died'));
+            $this->record($life, 'eulogy', $copy);
             $life->update(['eulogy_posted' => true]);
         }
     }
@@ -211,6 +214,25 @@ class LifecycleAnnouncer
     {
         $when = $verb === 'born' ? $life->started_at : ($life->ended_at ?? CarbonImmutable::now());
         return 'The One Life Tribune · '.$verb.' '.CarbonImmutable::parse($when)->diffForHumans();
+    }
+
+    /**
+     * Persist the raw generated copy (pre-substitution, so the stored text is the canonical
+     * {{PLAYER}}-templated output) for auditing and repetition checks. model is null on fallback.
+     *
+     * @param array{headline:string,body:string,fallback:bool} $copy
+     */
+    private function record(Life $life, string $kind, array $copy): void
+    {
+        $fallback = $copy['fallback'] ?? false;
+        Announcement::create([
+            'life_id' => $life->id,
+            'kind' => $kind,
+            'headline' => $copy['headline'],
+            'body' => $copy['body'],
+            'was_fallback' => $fallback,
+            'model' => $fallback ? null : config('llm.model'),
+        ]);
     }
 
     private function factsBuilder(): LifeFactsBuilder

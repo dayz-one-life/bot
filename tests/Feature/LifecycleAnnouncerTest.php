@@ -219,3 +219,46 @@ it('does NOT birth an immediate respawn that rerolls under the grace mark', func
     expect($this->notifier->eulogies)->toHaveCount(1); // only the real life A
     expect($this->notifier->births)->toBeEmpty();      // the 90s reroll never reached grace
 });
+
+use App\Models\Announcement;
+
+it('persists a birth and eulogy row via the real LLM path', function () {
+    // Reset stubs so the specific pattern below takes priority over beforeEach's catch-all.
+    $factory = app(\Illuminate\Http\Client\Factory::class);
+    $prop = new \ReflectionProperty($factory, 'stubCallbacks');
+    $prop->setAccessible(true);
+    $prop->setValue($factory, collect());
+
+    Http::fake(['*/chat/completions' => Http::response([
+        'choices' => [['message' => ['content' => "HEAD\n📰 {{PLAYER}} body"]]],
+    ])]);
+
+    $birth = lifeWith('Born', 360, null);                          // open, 6 min, started 11:50 (due)
+    $death = lifeWith('Dead', 360, '2026-06-14T11:55:00Z');        // ended 11:55, 6 min (due)
+
+    $gen = new AnnouncementGenerator(
+        new OpenRouterClient('sk', 'm', 'https://x/api/v1', 20, 900, 1.0),
+        new MessagePicker(fn ($p, $a) => 0),
+    );
+    (new LifecycleAnnouncer($gen, $this->notifier, $this->state, graceSeconds: 300, maxAgeMinutes: 30))->run();
+
+    $b = Announcement::where('life_id', $birth->id)->where('kind', 'birth')->first();
+    expect($b)->not->toBeNull();
+    expect($b->was_fallback)->toBeFalse();
+    expect($b->model)->toBe(config('llm.model'));
+    expect($b->headline)->toBe('HEAD');
+    expect($b->body)->toContain('{{PLAYER}}'); // raw template stored, pre-substitution
+
+    expect(Announcement::where('life_id', $death->id)->where('kind', 'eulogy')->count())->toBe(1);
+});
+
+it('records was_fallback=true and null model on the canned path', function () {
+    $birth = lifeWith('Canned', 360, null); // due birth; fromConfig client has no key -> fallback
+
+    makeAnnouncer($this->state, $this->notifier)->run();
+
+    $b = Announcement::where('life_id', $birth->id)->where('kind', 'birth')->first();
+    expect($b)->not->toBeNull();
+    expect($b->was_fallback)->toBeTrue();
+    expect($b->model)->toBeNull();
+});
