@@ -27,7 +27,7 @@ class NewsPublishCommand extends Command
             }
 
             $facts = (new WeeklyFactsBuilder())->build($now);
-            $prose = (new NewspaperGenerator(OpenRouterClient::fromConfig()))->generate($facts);
+            $prose = (new NewspaperGenerator(OpenRouterClient::fromConfig((int) config('newspaper.max_tokens', 2000))))->generate($facts);
             $issue = $state->getInt('newspaper_issue_count', 0) + 1;
             $embeds = (new NewspaperComposer())->compose($facts, $prose, $issue);
 
