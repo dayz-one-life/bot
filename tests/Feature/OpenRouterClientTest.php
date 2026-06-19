@@ -22,6 +22,32 @@ it('posts a chat completion and returns the message content', function () {
     });
 });
 
+it('honors an explicit max_tokens override passed to fromConfig', function () {
+    config(['llm.api_key' => 'sk-test', 'llm.max_tokens' => 900]);
+    Http::fake([
+        '*/chat/completions' => Http::response([
+            'choices' => [['message' => ['content' => 'ok']]],
+        ]),
+    ]);
+
+    OpenRouterClient::fromConfig(2000)->complete('s', 'u');
+
+    Http::assertSent(fn ($r) => $r['max_tokens'] === 2000);
+});
+
+it('falls back to the global max_tokens when no override is given', function () {
+    config(['llm.api_key' => 'sk-test', 'llm.max_tokens' => 900]);
+    Http::fake([
+        '*/chat/completions' => Http::response([
+            'choices' => [['message' => ['content' => 'ok']]],
+        ]),
+    ]);
+
+    OpenRouterClient::fromConfig()->complete('s', 'u');
+
+    Http::assertSent(fn ($r) => $r['max_tokens'] === 900);
+});
+
 it('throws when the api key is empty (never calls out)', function () {
     Http::fake();
     $client = new OpenRouterClient(null, 'm', 'https://x/api/v1', 20, 900, 1.0);

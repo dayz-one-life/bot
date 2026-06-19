@@ -19,14 +19,19 @@ class OpenRouterClient
         private float $temperature = 1.0,
     ) {}
 
-    public static function fromConfig(): self
+    /**
+     * @param int|null $maxTokens Per-call output cap; null uses the global `llm.max_tokens`. Long-form
+     *                            callers (e.g. the weekly newspaper) pass a larger budget so their
+     *                            multi-section output isn't truncated by the short-form default.
+     */
+    public static function fromConfig(?int $maxTokens = null): self
     {
         return new self(
             config('llm.api_key'),
             config('llm.model', 'anthropic/claude-haiku-4.5'),
             config('llm.base_url', 'https://openrouter.ai/api/v1'),
             (int) config('llm.timeout_seconds', 20),
-            (int) config('llm.max_tokens', 900),
+            $maxTokens ?? (int) config('llm.max_tokens', 900),
             (float) config('llm.temperature', 1.0),
         );
     }
