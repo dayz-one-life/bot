@@ -146,7 +146,10 @@ class LifeFactsBuilder
         }
     }
 
-    private function priorDeath(Life $life): ?string
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function priorDeath(Life $life): ?array
     {
         $player = $life->player;
         if (! $player) return null;
@@ -160,10 +163,15 @@ class LifeFactsBuilder
 
         if (! $prev) return null;
 
-        // Deliberately name-free: the LLM is told never to write a real name, so any gamertag we feed
-        // it here gets rendered as the {{KILLER}} token — but the CURRENT life has no killer to
-        // substitute (a birth) or a DIFFERENT killer (a eulogy), leaking/mis-pointing the token.
-        return "previous life ended ({$prev->death_cause}) after ".SessionDuration::human((int) $prev->playtime_seconds);
+        // Name-free by design: never include who ended the prior life. The birth/eulogy prompt
+        // renders any gamertag as a {{KILLER}} token, which would leak or mis-point on a birth
+        // (no killer) or a different-killer eulogy. Cause/weapon/distance/age name nobody.
+        return [
+            'cause' => $prev->death_cause,
+            'weapon' => $prev->death_weapon,
+            'distance_m' => $prev->death_distance,
+            'playtime_human' => SessionDuration::human((int) $prev->playtime_seconds),
+        ];
     }
 
     /** Distinct OTHER players whose session spans the spawn instant — "the world they spawned into". */

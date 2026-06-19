@@ -120,7 +120,7 @@ it('summarises the prior death for a respawn and marks it NOT the first life', f
     $facts = (new LifeFactsBuilder())->build($current);
 
     expect($facts['linked'])->toBeFalse();
-    expect($facts['prior_death'])->toContain('environment');
+    expect($facts['prior_death']['cause'])->toBe('environment');
     expect($facts['is_first_life'])->toBeFalse();
 });
 
@@ -134,8 +134,8 @@ it('does NOT leak the prior killer gamertag into the prior-death summary', funct
 
     $facts = (new LifeFactsBuilder())->build($current);
 
-    expect($facts['prior_death'])->toContain('pvp');
-    expect($facts['prior_death'])->not->toContain('PriorSniper');
+    expect($facts['prior_death']['cause'])->toBe('pvp');
+    expect(json_encode($facts['prior_death']))->not->toContain('PriorSniper'); // name-free: no killer gamertag in any field
 });
 
 it('counts the world the player spawned into, excluding their own session', function () {
