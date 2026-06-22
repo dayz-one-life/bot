@@ -9,6 +9,7 @@ use App\Models\Player;
 use App\Models\PlayerPosition;
 use App\Services\Bounty\AssociateDetector;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 function makePlayer(string $tag): Player {
     return Player::create(['gamertag' => $tag, 'first_seen_at' => now(), 'last_seen_at' => now()]);
@@ -139,6 +140,33 @@ it('force-false override denies a pair even with a high score', function () {
     AssociateOverride::create(['player_a_id' => $lo, 'player_b_id' => $hi, 'force' => false]);
     config(['bounty.weight_copres' => 1.0, 'bounty.assoc_threshold' => 0.1]);
     expect($this->detector->areAssociates($a, $b, $this->now))->toBeFalse();
+});
+
+it('does not re-query the same player data across the associatesOf scan', function () {
+    // Regression for the `/team show` "application did not respond" timeout: associatesOf
+    // scanned every player and, for each pair, recomputed A's positions/sessions/lives
+    // from scratch in BOTH score directions — ~19 queries per candidate. On production
+    // (138 players) that was ~2600 queries / ~6.6s, well past Discord's 3s ACK deadline.
+    // Per-player DB fetches must be memoised within a single scan: well under 10 queries
+    // per candidate.
+    $a = makePlayer('Subject');
+    gameSession($a, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+    playerPos($a, '2026-06-12T09:00:00Z', 1000, 1000);
+
+    $others = 25;
+    for ($i = 0; $i < $others; $i++) {
+        $p = makePlayer("Other{$i}");
+        gameSession($p, '2026-06-12T08:00:00Z', '2026-06-12T10:00:00Z');
+        playerPos($p, '2026-06-12T09:00:30Z', 1050, 1000);
+    }
+
+    DB::enableQueryLog();
+    $this->detector->associatesOf($a, $this->now);
+    $count = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    // Pre-fix this was ~19/candidate; memoised it is a small constant per candidate.
+    expect($count)->toBeLessThan(10 * ($others + 1));
 });
 
 it('associatesOf returns every player clearing the bar', function () {
